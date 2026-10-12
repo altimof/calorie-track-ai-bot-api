@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useClosingConfirmation } from "@/hooks/useClosingConfirmation";
 
 interface MealFormData {
   description: string;
@@ -26,6 +27,11 @@ export function MealEditor({
 }: MealEditorProps) {
   const { t } = useTranslation();
   const [form, setForm] = useState<MealFormData>(meal);
+  useClosingConfirmation(
+    (Object.keys(meal) as (keyof MealFormData)[]).some(
+      (field) => form[field] !== meal[field],
+    ),
+  );
 
   const handleChange = (field: keyof MealFormData, value: string) => {
     setForm((prev) => {

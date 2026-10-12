@@ -11,6 +11,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { unwrap } from "@/api/unwrap";
 import { formatDate } from "@/utils/date";
+import { useClosingConfirmation } from "@/hooks/useClosingConfirmation";
 import type { GoalResponse, DailySummary } from "@/api/model";
 
 export default function GoalsPage() {
@@ -36,12 +37,15 @@ export default function GoalsPage() {
     queryClient.invalidateQueries({ queryKey: ["/api/v1/daily-summary"] });
   }, [queryClient]);
 
+  const initialGoalInput = goal?.daily_kcal_target?.toString() ?? "2000";
+  useClosingConfirmation(editing && goalInput !== initialGoalInput);
+
   const handleEdit = useCallback(() => {
-    setGoalInput(goal?.daily_kcal_target?.toString() ?? "2000");
+    setGoalInput(initialGoalInput);
     setError("");
     setMutationError(null);
     setEditing(true);
-  }, [goal]);
+  }, [initialGoalInput]);
 
   const handleSave = useCallback(() => {
     const value = parseInt(goalInput, 10);

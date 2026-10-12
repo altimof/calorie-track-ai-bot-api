@@ -9,7 +9,6 @@ const webapp = window.Telegram?.WebApp;
 if (webapp?.initData) {
   webapp.ready();
   webapp.expand();
-  if (webapp.enableClosingConfirmation) webapp.enableClosingConfirmation();
   if (webapp.setHeaderColor) webapp.setHeaderColor("bg_color");
   if (webapp.setBackgroundColor) webapp.setBackgroundColor("bg_color");
 }

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSubmitFeedbackApiV1FeedbackPost } from "@/api/queries/feedback/feedback";
+import { useClosingConfirmation } from "@/hooks/useClosingConfirmation";
 
 const MAX_LENGTH = 5000;
 
@@ -9,6 +10,7 @@ export default function FeedbackPage() {
   const [message, setMessage] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const submitFeedback = useSubmitFeedbackApiV1FeedbackPost();
+  useClosingConfirmation(message.trim() !== "");
 
   const handleSubmit = () => {
     if (!message.trim()) return;

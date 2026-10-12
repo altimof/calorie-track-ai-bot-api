@@ -74,6 +74,7 @@ window.Telegram = {
     setHeaderColor: () => {},
     setBackgroundColor: () => {},
     enableClosingConfirmation: () => {},
+    disableClosingConfirmation: () => {},
     HapticFeedback: {
       impactOccurred: () => {},
       notificationOccurred: () => {},
