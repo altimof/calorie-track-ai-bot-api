@@ -53,7 +53,7 @@ async def get_daily_statistics(
     )
 
     logger.info(
-        f"Daily statistics retrieved for user {request.headers.get('x-user-id')}",
+        f"Daily statistics retrieved for user {user_id}",
         extra={
             "start_date": start_date.isoformat(),
             "end_date": end_date.isoformat(),
@@ -99,7 +99,7 @@ async def get_macro_statistics(
     )
 
     logger.info(
-        f"Macro statistics retrieved for user {request.headers.get('x-user-id')}",
+        f"Macro statistics retrieved for user {user_id}",
         extra={
             "start_date": start_date.isoformat(),
             "end_date": end_date.isoformat(),

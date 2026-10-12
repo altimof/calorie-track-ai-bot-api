@@ -410,7 +410,7 @@ test.describe('Feedback Form - Error Handling', () => {
       await route.fulfill({
         status: 401,
         contentType: 'application/json',
-        body: JSON.stringify({ detail: 'Missing x-user-id header' }),
+        body: JSON.stringify({ detail: 'Missing Telegram initData' }),
       });
     });
 

@@ -11,7 +11,7 @@ The feedback feature has been thoroughly tested across all layers:
 - **Frontend E2E Tests**: Playwright spec (currently not matched by any Playwright project; see below)
 
 **Feature under test** (`backend/src/calorie_track_ai_bot/api/v1/feedback.py`, `services/feedback_service.py`):
-- `POST /api/v1/feedback` (201) and `GET /api/v1/feedback/{feedback_id}`; both require the `x-user-id` header
+- `POST /api/v1/feedback` (201) and `GET /api/v1/feedback/{feedback_id}`; both require Telegram `initData` (`Authorization: tma <initData>`), or `x-user-id` when the backend runs with `ALLOW_INSECURE_USER_ID_HEADER=true`
 - Rows are inserted into the `feedback_submissions` table (defined in `backend/infra/schema.sql`)
 - After insert, a Telegram message is sent to `ADMIN_NOTIFICATION_CHAT_ID` when `FEEDBACK_NOTIFICATIONS_ENABLED` is `true` (the default); notification errors are logged and do not fail the submission
 
@@ -28,7 +28,7 @@ Tests the REST API endpoints for feedback submission and retrieval.
 
 **Coverage:**
 - ✅ Successful feedback submission with valid data
-- ✅ Authentication validation (x-user-id header required)
+- ✅ Authentication validation (Telegram initData, or x-user-id with the insecure-header flag)
 - ✅ Message type validation (feedback, bug, question, support)
 - ✅ Empty message validation
 - ✅ Message length validation (max 5000 characters)

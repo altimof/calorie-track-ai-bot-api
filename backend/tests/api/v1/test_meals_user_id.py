@@ -38,7 +38,7 @@ class TestMealsUserIdDetection:
         response = api_client.get("/api/v1/meals")
 
         assert response.status_code == 401
-        assert "Missing x-user-id header" in response.json()["detail"]
+        assert "Missing Telegram initData" in response.json()["detail"]
 
     def test_empty_user_id_header(self, api_client):
         """Test getting meals with empty x-user-id header returns 401."""

@@ -89,7 +89,7 @@ class TestFeedbackSubmissionContract:
         response = client.post("/api/v1/feedback", json=feedback_data)
 
         assert response.status_code == 401
-        assert "x-user-id" in response.json()["detail"].lower()
+        assert "initdata" in response.json()["detail"].lower()
 
     def test_submit_feedback_validates_message_type(self):
         """Test that invalid message_type is rejected."""

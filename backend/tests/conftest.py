@@ -18,6 +18,8 @@ test_env_vars = {
     "BUCKET_NAME": "test-bucket",
     "AWS_REGION": "auto",
     "APP_ENV": "dev",
+    # Route tests identify users by x-user-id; initData auth is covered in test_deps.py
+    "ALLOW_INSECURE_USER_ID_HEADER": "true",
 }
 
 # Set environment variables immediately

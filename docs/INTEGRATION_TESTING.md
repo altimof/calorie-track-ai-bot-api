@@ -92,7 +92,8 @@ The frontend reads only two variables (`frontend/src/api/client.ts`, `frontend/s
 # API base URL (defaults to http://localhost:8000)
 VITE_API_BASE_URL=http://localhost:8000
 
-# Fallback x-user-id in dev when not running inside Telegram (defaults to 59357664)
+# Fallback x-user-id in dev when not running inside Telegram (defaults to 59357664);
+# the backend must run with ALLOW_INSECURE_USER_ID_HEADER=true to accept it
 VITE_DEV_USER_ID=123456789
 ```
 
@@ -147,7 +148,7 @@ sequenceDiagram
 
 ### 2. Authentication Flow Testing
 
-There is no session/token endpoint. The frontend's `customFetch` (`frontend/src/api/client.ts`) sends an `x-user-id` header taken from `window.Telegram.WebApp.initDataUnsafe.user.id` (or `VITE_DEV_USER_ID` in dev). The backend (`api/v1/deps.py`) returns 401 when the header is missing and resolves it to an internal user ID.
+There is no session/token endpoint. The frontend's `customFetch` (`frontend/src/api/client.ts`) sends `window.Telegram.WebApp.initData` as `Authorization: tma <initData>`. Outside Telegram, dev builds send `VITE_DEV_USER_ID` as `x-user-id` instead. The backend (`api/v1/deps.py`) verifies the `initData` signature and returns 401 when it is invalid, expired or missing; `x-user-id` is accepted only with `ALLOW_INSECURE_USER_ID_HEADER=true`. The Telegram user ID is then resolved to an internal user ID.
 
 ```mermaid
 sequenceDiagram
@@ -157,7 +158,8 @@ sequenceDiagram
     participant DB as Database
 
     TEST->>FE: Initialize app (mock window.Telegram.WebApp)
-    FE->>API: Request with x-user-id header
+    FE->>API: Request with Authorization: tma initData
+    API->>API: Verify initData signature
     API->>DB: Resolve telegram user ID to user
     DB-->>API: User ID
     API-->>FE: Protected resource
@@ -271,7 +273,7 @@ make docker-stop
 
 There is no `frontend/tests/integration/` directory and no `test:integration` script. Frontend-to-backend integration is covered by these Vitest suites (all run by `bun run test`):
 
-- `frontend/src/api/__tests__/client.test.ts` - `customFetch` adds `x-user-id` and `X-Correlation-ID` headers and throws `ApiError` on non-OK responses
+- `frontend/src/api/__tests__/client.test.ts` - `customFetch` sends `initData` as `Authorization` (or `x-user-id` in dev without Telegram) and `X-Correlation-ID` and throws `ApiError` on non-OK responses
 - `frontend/src/tests/contracts/*.test.ts` - Response-shape checks for meals, estimates, photos, and photo display
 - `frontend/src/test/handlers.ts` - MSW handlers mocking `http://localhost:8000` endpoints (`/health/live`, `/api/v1/goals`, `/api/v1/meals`, ...) used by component and page tests
 
@@ -279,7 +281,7 @@ There is no `frontend/tests/integration/` directory and no `test:integration` sc
 
 ```typescript
 // frontend/src/api/__tests__/client.test.ts
-it("adds x-user-id header from Telegram", async () => {
+it("sends Telegram initData as Authorization and no x-user-id", async () => {
   const spy = vi
     .spyOn(globalThis, "fetch")
     .mockResolvedValue(
@@ -289,9 +291,9 @@ it("adds x-user-id header from Telegram", async () => {
   await customFetch({ url: "/health/live", method: "GET" });
 
   const [, init] = spy.mock.calls[0];
-  expect((init?.headers as Record<string, string>)["x-user-id"]).toBe(
-    "123456",
-  );
+  const headers = init?.headers as Record<string, string>;
+  expect(headers["Authorization"]).toBe("tma mock_init_data");
+  expect(headers["x-user-id"]).toBeUndefined();
 });
 ```
 
@@ -335,8 +337,9 @@ graph TD
    - Validate headers
 
 2. **Verify Authentication**
-   - Check the `x-user-id` header is sent (from `Telegram.WebApp.initDataUnsafe.user.id` or `VITE_DEV_USER_ID`)
-   - A missing header returns 401 from `get_authenticated_user_id`
+   - Inside Telegram, check `Authorization: tma <initData>` is sent; outside Telegram in dev, check `x-user-id` (`VITE_DEV_USER_ID`) is sent
+   - 401 "Invalid Telegram initData": signature or age check failed (wrong `TELEGRAM_BOT_TOKEN` on the backend, or data older than 24 hours)
+   - 401 "Missing Telegram initData": no `initData`, and `x-user-id` is missing or `ALLOW_INSECURE_USER_ID_HEADER` is off
 
 3. **Monitor Network Requests**
    - Check request/response headers

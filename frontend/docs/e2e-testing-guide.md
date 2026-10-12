@@ -182,7 +182,7 @@ await page.addInitScript(() => {
 });
 ```
 
-Without `initData`, `src/main.tsx` skips WebApp initialization and the API client sends `VITE_DEV_USER_ID` (or a default dev ID) as `x-user-id` in dev mode.
+Without `initData`, `src/main.tsx` skips WebApp initialization and the API client sends `VITE_DEV_USER_ID` (or a default dev ID) as `x-user-id` in dev mode, which the backend accepts only with `ALLOW_INSECURE_USER_ID_HEADER=true`. With `initData` present, it sends `Authorization: tma <initData>` instead.
 
 ### API Mocking
 API calls are mocked per test with `page.route()` / `context.route()`:

@@ -1,12 +1,16 @@
 const SESSION_CORRELATION_ID = crypto.randomUUID();
 
-function getTelegramUserId(): string | undefined {
-  return (
-    window.Telegram?.WebApp?.initDataUnsafe?.user?.id?.toString() ??
-    (import.meta.env.DEV
-      ? (import.meta.env.VITE_DEV_USER_ID ?? "59357664")
-      : undefined)
-  );
+// Signed Mini App launch data; the backend verifies it and takes the user from it.
+function getTelegramInitData(): string | undefined {
+  return window.Telegram?.WebApp?.initData || undefined;
+}
+
+// Unsigned user ID for dev builds outside Telegram. Accepted only by a backend
+// running with ALLOW_INSECURE_USER_ID_HEADER=true.
+function getDevUserId(): string | undefined {
+  return import.meta.env.DEV
+    ? (import.meta.env.VITE_DEV_USER_ID ?? "59357664")
+    : undefined;
 }
 
 // IANA zone (e.g. "America/New_York") the backend uses to bucket meals into
@@ -78,9 +82,14 @@ export async function customFetch<T>(
     headers["Content-Type"] = headers["Content-Type"] ?? "application/json";
   }
 
-  const userId = getTelegramUserId();
-  if (userId) {
-    headers["x-user-id"] = userId;
+  const initData = getTelegramInitData();
+  if (initData) {
+    headers["Authorization"] = `tma ${initData}`;
+  } else {
+    const devUserId = getDevUserId();
+    if (devUserId) {
+      headers["x-user-id"] = devUserId;
+    }
   }
 
   const timeZone = getTimeZone();

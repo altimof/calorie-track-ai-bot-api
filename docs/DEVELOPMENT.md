@@ -90,7 +90,8 @@ Frontend environment variables (the only ones read by `frontend/src`):
 # API Configuration (defaults to http://localhost:8000)
 VITE_API_BASE_URL=http://localhost:8000
 
-# Telegram user ID sent as x-user-id when running outside Telegram (dev only)
+# Telegram user ID sent as x-user-id when running outside Telegram (dev only);
+# the backend must run with ALLOW_INSECURE_USER_ID_HEADER=true to accept it
 VITE_DEV_USER_ID=123456789
 ```
 
@@ -302,6 +303,24 @@ flyctl deploy
 # The CI workflow runs this from the repository root
 vercel --prod
 ```
+
+### Authentication settings
+
+The backend authenticates Mini App requests with Telegram `initData`, so production needs `TELEGRAM_BOT_TOKEN` set to the token of the bot that opens the Mini App. A different token makes every API request fail with 401 "Invalid Telegram initData".
+
+`ALLOW_INSECURE_USER_ID_HEADER` must be unset or `false` in production. When it is `true`, the backend also accepts the unsigned `x-user-id` header, and anyone can act as any user.
+
+#### Rolling out initData authentication
+
+Frontends built before initData authentication send only `x-user-id`; a backend with initData authentication rejects them unless the flag is on. Roll out in this order:
+
+1. Turn the flag on: `flyctl secrets set ALLOW_INSECURE_USER_ID_HEADER=true -a calorize-me-bot`.
+2. Deploy the backend and check that the current frontend still works.
+3. Deploy the frontend. Open the Mini App from Telegram and check in the browser dev tools that requests carry `Authorization: tma ...` and succeed.
+4. Turn the flag off: `flyctl secrets unset ALLOW_INSECURE_USER_ID_HEADER -a calorize-me-bot`.
+5. Fully close and reopen the Mini App in Telegram, and check that it still loads your data.
+
+Deploy the backend before the frontend: a frontend with initData authentication sends no `x-user-id`, so the old backend rejects all of its requests.
 
 ## Contributing
 

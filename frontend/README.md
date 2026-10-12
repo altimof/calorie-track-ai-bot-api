@@ -124,14 +124,14 @@ frontend/
 ```bash
 # .env.local
 VITE_API_BASE_URL=http://localhost:8000   # defaults to http://localhost:8000
-VITE_DEV_USER_ID=123456                   # dev only: x-user-id when not running inside Telegram
+VITE_DEV_USER_ID=123456                   # dev only: x-user-id when not running inside Telegram (backend needs ALLOW_INSECURE_USER_ID_HEADER=true)
 ```
 
 #### Telegram WebApp Integration
 The app automatically detects and integrates with Telegram's WebApp API:
 - `ready()`, `expand()`, closing confirmation, header/background colors (in `src/main.tsx`, only when `initData` is present)
 - Theme detection (light/dark mode) and language (`en`/`ru`) from Telegram, with system/browser fallbacks
-- User ID from `initDataUnsafe`, sent to the API as the `x-user-id` header
+- Signed `initData` sent to the API as `Authorization: tma <initData>`; the backend verifies it and takes the user ID from it
 
 ## 🧪 Testing
 

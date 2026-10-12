@@ -46,6 +46,12 @@ AWS_REGION: str = os.getenv("AWS_REGION", "auto")
 # Telegram Bot configuration
 TELEGRAM_BOT_TOKEN: str | None = os.getenv("TELEGRAM_BOT_TOKEN")
 
+# Accept the unsigned x-user-id header when no initData is sent. Local development
+# and the frontend rollout only: anyone can set this header to any user's ID.
+ALLOW_INSECURE_USER_ID_HEADER: bool = (
+    os.getenv("ALLOW_INSECURE_USER_ID_HEADER", "false").lower() == "true"
+)
+
 # Inline mode configuration
 INLINE_MODE_ENABLED: bool = os.getenv("INLINE_MODE_ENABLED", "false").lower() == "true"
 INLINE_HASH_SALT: str = os.getenv("INLINE_HASH_SALT", "")

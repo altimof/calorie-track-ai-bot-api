@@ -6,7 +6,7 @@ describe("customFetch", () => {
     vi.restoreAllMocks();
   });
 
-  it("adds x-user-id header from Telegram", async () => {
+  it("sends Telegram initData as Authorization and no x-user-id", async () => {
     const spy = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(
@@ -16,9 +16,33 @@ describe("customFetch", () => {
     await customFetch({ url: "/health/live", method: "GET" });
 
     const [, init] = spy.mock.calls[0];
-    expect((init?.headers as Record<string, string>)["x-user-id"]).toBe(
-      "123456",
-    );
+    const headers = init?.headers as Record<string, string>;
+    expect(headers["Authorization"]).toBe("tma mock_init_data");
+    expect(headers["x-user-id"]).toBeUndefined();
+  });
+
+  it("falls back to dev x-user-id without initData in dev builds", async () => {
+    const webapp = window.Telegram!.WebApp;
+    const original = webapp.initData;
+    webapp.initData = "";
+    try {
+      const spy = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValue(
+          new Response(JSON.stringify({ ok: true }), { status: 200 }),
+        );
+
+      await customFetch({ url: "/health/live", method: "GET" });
+
+      const [, init] = spy.mock.calls[0];
+      const headers = init?.headers as Record<string, string>;
+      expect(headers["Authorization"]).toBeUndefined();
+      expect(headers["x-user-id"]).toBe(
+        import.meta.env.VITE_DEV_USER_ID ?? "59357664",
+      );
+    } finally {
+      webapp.initData = original;
+    }
   });
 
   it("adds X-Correlation-ID header", async () => {

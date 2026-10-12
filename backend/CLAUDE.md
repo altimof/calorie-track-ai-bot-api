@@ -51,7 +51,7 @@ src/calorie_track_ai_bot/
 
 ## Key Patterns
 
-**Auth:** No JWT/session auth. Telegram user ID arrives via `x-user-id` header. Use `Depends(get_telegram_user_id)` or `Depends(get_authenticated_user_id)` from `api/v1/deps.py`. The `db/_base.py` module resolves telegram_id to internal UUID user with a 5-minute TTL cache (max 1000 entries).
+**Auth:** No JWT/session auth. The Mini App sends Telegram `initData` as `Authorization: tma <initData>`; `get_telegram_user_id` verifies it (`services/telegram_auth.py`, HMAC with `TELEGRAM_BOT_TOKEN`, 24h max age) and takes the Telegram user ID from it. The unsigned `x-user-id` header is accepted only when no `initData` is sent and `ALLOW_INSECURE_USER_ID_HEADER=true` (local dev; tests enable it in `conftest.py`, and `tests/api/v1/test_deps.py` covers the signed path). Use `Depends(get_telegram_user_id)` or `Depends(get_authenticated_user_id)` from `api/v1/deps.py`. The `db/_base.py` module resolves telegram_id to internal UUID user with a 5-minute TTL cache (max 1000 entries).
 
 **Dates and time zones:** The Mini App sends the browser's IANA zone in an `x-timezone` header; `get_user_timezone` in `api/v1/deps.py` reads it (falls back to UTC). Meal-day filters and grouping use `LOCAL_MEAL_DATE_SQL` (`created_at AT TIME ZONE tz`), not the `meal_date` column. Bot-side daily totals still use UTC.
 
