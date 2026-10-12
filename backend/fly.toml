@@ -1,4 +1,4 @@
-app = 'calorie-track-ai-bot'
+app = 'calorize-me-bot'
 primary_region = 'lax'
 
 [build]
@@ -6,7 +6,7 @@ primary_region = 'lax'
 
 [env]
   USE_WEBHOOK = 'true'
-  WEBHOOK_URL = 'https://calorie-track-ai-bot.fly.dev/bot'
+  WEBHOOK_URL = 'https://calorize-me-bot.fly.dev/bot'
   ENABLE_WORKER = 'true'
 
 [[services]]
