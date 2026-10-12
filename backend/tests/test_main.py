@@ -1,6 +1,5 @@
 """Tests for main application."""
 
-from unittest.mock import patch
 from uuid import UUID
 
 import pytest
@@ -46,27 +45,22 @@ class TestMainApplication:
 
     def test_photos_endpoints_available(self, client):
         """Test that photos endpoints are available."""
-        # Test that endpoint exists (will fail validation but endpoint exists)
+        # The endpoint exists and requires authentication
         response = client.post("/api/v1/photos")
-        assert response.status_code == 422  # Validation error, but endpoint exists
+        assert response.status_code == 401
 
     def test_estimates_endpoints_available(self, client):
         """Test that estimates endpoints are available."""
-        with (
-            patch("calorie_track_ai_bot.services.queue.enqueue_estimate_job") as mock_enqueue,
-            patch("calorie_track_ai_bot.services.database.get_pool"),
-            patch("calorie_track_ai_bot.api.v1.estimates.db_get_estimate") as mock_get_est,
-        ):
-            mock_enqueue.return_value = "job-123"
-            mock_get_est.return_value = None
+        headers = {"x-user-id": "123456789"}
 
-            # Test estimate photo endpoint
-            response = client.post("/api/v1/photos/test123/estimate")
-            assert response.status_code in [200, 500]
+        # The routes exist: an unknown ID gets the endpoints' own 404, not the router's
+        response = client.post("/api/v1/photos/test123/estimate", headers=headers)
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Not found"
 
-            # Test get estimate endpoint
-            response = client.get("/api/v1/estimates/test123")
-            assert response.status_code in [404, 500]
+        response = client.get("/api/v1/estimates/test123", headers=headers)
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Not found"
 
     def test_meals_endpoints_available(self, client):
         """Test that meals endpoints are available."""

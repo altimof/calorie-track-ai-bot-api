@@ -33,6 +33,16 @@ async def db_get_or_create_user(
         return user_id
 
 
+async def db_find_user_id(telegram_id: int) -> str | None:
+    """Return the internal user ID for a registered Telegram user, or None."""
+    pool = await database.get_pool()
+
+    async with pool.connection() as conn:
+        cur = await conn.execute("SELECT id FROM users WHERE telegram_id = %s", (telegram_id,))
+        row = await cur.fetchone()
+        return str(dict(row)["id"]) if row else None
+
+
 async def db_get_user(user_id: str) -> dict[str, Any] | None:
     """Get user record by ID."""
     pool = await database.get_pool()

@@ -12,7 +12,11 @@ MAX_CACHE_SIZE = 1000
 
 
 async def resolve_user_id(telegram_user_id: str | None) -> str | None:
-    """Resolve Telegram user ID to database UUID with caching."""
+    """Resolve Telegram user ID to database UUID with caching.
+
+    Only looks users up: returns None for a Telegram user who has never used the
+    bot. Users are registered by the bot (db_get_or_create_user), not by the API.
+    """
     if not telegram_user_id:
         return None
 
@@ -37,10 +41,10 @@ async def resolve_user_id(telegram_user_id: str | None) -> str | None:
             _user_id_cache.pop(telegram_user_id, None)
 
         # Lazy import to avoid circular imports
-        from .users import db_get_or_create_user
+        from .users import db_find_user_id
 
         telegram_id_int = int(telegram_user_id)
-        user_id = await db_get_or_create_user(telegram_id_int)
+        user_id = await db_find_user_id(telegram_id_int)
 
         if user_id:
             # Evict oldest entry if cache is full

@@ -62,3 +62,22 @@ async def db_get_estimate(estimate_id: str) -> dict[str, Any] | None:
         cur = await conn.execute("SELECT * FROM estimates WHERE id = %s", (estimate_id,))
         row = await cur.fetchone()
         return dict(row) if row else None
+
+
+async def db_get_user_estimate(estimate_id: str, user_id: str) -> dict[str, Any] | None:
+    """Get an estimate by ID only if one of its photos belongs to the given user."""
+    pool = await database.get_pool()
+
+    async with pool.connection() as conn:
+        cur = await conn.execute(
+            """SELECT e.* FROM estimates e
+               WHERE e.id = %s
+                 AND EXISTS (
+                   SELECT 1 FROM photos p
+                   WHERE p.user_id = %s
+                     AND (p.id = e.photo_id OR p.id::text = ANY(e.photo_ids))
+                 )""",
+            (estimate_id, user_id),
+        )
+        row = await cur.fetchone()
+        return dict(row) if row else None

@@ -1,211 +1,178 @@
 """Tests for estimates API endpoints."""
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from calorie_track_ai_bot.api.v1.deps import get_authenticated_user_id
 from calorie_track_ai_bot.api.v1.estimates import router
+
+USER_ID = "1d882190-ac3f-4a06-8a44-20e46bafb9a5"
+PHOTO_ID = "6f1c2a3e-8b4d-4c5e-9f60-7a8b9c0d1e2f"
+ESTIMATE_ID = "7dd63665-3a87-4e14-8ec6-dcfe779cba00"
+
+
+def make_estimate(estimate_id: str = ESTIMATE_ID) -> dict:
+    return {
+        "id": estimate_id,
+        "photo_id": PHOTO_ID,
+        "kcal_mean": 500,
+        "kcal_min": 400,
+        "kcal_max": 600,
+        "confidence": 0.8,
+        "breakdown": [{"label": "pizza", "kcal": 500, "confidence": 0.8}],
+        "status": "done",
+    }
 
 
 class TestEstimatesEndpoints:
-    """Test estimate-related endpoints."""
+    """Test estimate-related endpoints for a registered user."""
 
     @pytest.fixture
     def client(self):
-        """Create test client."""
-        from fastapi import FastAPI
-
+        """Test client whose requests come from USER_ID."""
         app = FastAPI()
         app.include_router(router)
+        app.dependency_overrides[get_authenticated_user_id] = lambda: USER_ID
         return TestClient(app)
 
-    @patch("calorie_track_ai_bot.api.v1.estimates.enqueue_estimate_job")
-    def test_estimate_photo_success(self, mock_enqueue, client):
-        """Test successful photo estimation request."""
-        mock_enqueue.return_value = "photo123"
+    @pytest.fixture
+    def owned_photo(self):
+        """The requested photo belongs to the requesting user."""
+        with patch(
+            "calorie_track_ai_bot.api.v1.estimates.db_get_user_photo",
+            AsyncMock(return_value={"id": PHOTO_ID, "user_id": USER_ID}),
+        ) as mock_get_photo:
+            yield mock_get_photo
 
-        response = client.post("/photos/photo123/estimate")
+    @patch("calorie_track_ai_bot.api.v1.estimates.enqueue_estimate_job")
+    def test_estimate_photo_success(self, mock_enqueue, client, owned_photo):
+        """Test successful photo estimation request."""
+        mock_enqueue.return_value = "job123"
+
+        response = client.post(f"/photos/{PHOTO_ID}/estimate")
 
         assert response.status_code == 200
-        data = response.json()
-
-        # Check response structure
-        assert "estimate_id" in data
-        assert "status" in data
-
-        # Check values
-        assert data["estimate_id"] == "photo123"
-        assert data["status"] == "queued"
+        assert response.json() == {"estimate_id": "job123", "status": "queued"}
+        owned_photo.assert_awaited_once_with(PHOTO_ID, USER_ID)
+        mock_enqueue.assert_awaited_once_with(PHOTO_ID)
 
     @patch("calorie_track_ai_bot.api.v1.estimates.enqueue_estimate_job")
-    def test_estimate_photo_different_ids(self, mock_enqueue, client):
-        """Test photo estimation with different photo IDs."""
-        test_cases = [
-            "photo123",
-            "photo456",
-            "550e8400-e29b-41d4-a716-446655440000",
-            "test-photo-789",
-        ]
+    def test_estimate_other_users_photo_returns_404(self, mock_enqueue, client, owned_photo):
+        """A photo that isn't the user's is reported as missing, and nothing is queued."""
+        owned_photo.return_value = None
 
-        for photo_id in test_cases:
-            mock_enqueue.return_value = photo_id
+        response = client.post(f"/photos/{PHOTO_ID}/estimate")
 
-            response = client.post(f"/photos/{photo_id}/estimate")
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Not found"
+        mock_enqueue.assert_not_called()
 
-            assert response.status_code == 200
-            data = response.json()
-            assert data["estimate_id"] == photo_id
-            assert data["status"] == "queued"
+    @pytest.mark.parametrize("photo_id", ["photo123", "test-photo-789"])
+    @patch("calorie_track_ai_bot.api.v1.estimates.enqueue_estimate_job")
+    def test_estimate_malformed_photo_id_returns_404(
+        self, mock_enqueue, client, owned_photo, photo_id
+    ):
+        """Non-UUID IDs are rejected without a database lookup."""
+        response = client.post(f"/photos/{photo_id}/estimate")
+
+        assert response.status_code == 404
+        owned_photo.assert_not_called()
+        mock_enqueue.assert_not_called()
 
     @patch("calorie_track_ai_bot.api.v1.estimates.enqueue_estimate_job")
-    def test_estimate_photo_queue_error(self, mock_enqueue, client):
+    def test_estimate_photo_queue_error(self, mock_enqueue, client, owned_photo):
         """Test photo estimation when queue operation fails."""
         mock_enqueue.side_effect = Exception("Queue Error")
 
-        response = client.post("/photos/photo123/estimate")
+        response = client.post(f"/photos/{PHOTO_ID}/estimate")
 
-        # Should propagate the error
         assert response.status_code == 500
 
     def test_estimate_photo_methods(self, client):
         """Test that estimate photo only accepts POST requests."""
-        get_response = client.get("/photos/photo123/estimate")
-        assert get_response.status_code == 405  # Method Not Allowed
+        assert client.get(f"/photos/{PHOTO_ID}/estimate").status_code == 405
+        assert client.put(f"/photos/{PHOTO_ID}/estimate").status_code == 405
+        assert client.delete(f"/photos/{PHOTO_ID}/estimate").status_code == 405
 
-        put_response = client.put("/photos/photo123/estimate")
-        assert put_response.status_code == 405
-
-        delete_response = client.delete("/photos/photo123/estimate")
-        assert delete_response.status_code == 405
-
-    @patch("calorie_track_ai_bot.api.v1.estimates.db_get_estimate")
+    @patch("calorie_track_ai_bot.api.v1.estimates.db_get_user_estimate")
     def test_get_estimate_success(self, mock_db_get, client):
         """Test successful estimate retrieval."""
-        estimate_data = {
-            "id": "estimate123",
-            "photo_id": "photo123",
-            "kcal_mean": 500,
-            "kcal_min": 400,
-            "kcal_max": 600,
-            "confidence": 0.8,
-            "breakdown": [{"label": "pizza", "kcal": 500, "confidence": 0.8}],
-            "status": "done",
-        }
-        mock_db_get.return_value = estimate_data
+        mock_db_get.return_value = make_estimate()
 
-        response = client.get("/estimates/estimate123")
+        response = client.get(f"/estimates/{ESTIMATE_ID}")
 
         assert response.status_code == 200
-        data = response.json()
-        assert data == estimate_data
+        assert response.json() == make_estimate()
+        mock_db_get.assert_awaited_once_with(ESTIMATE_ID, USER_ID)
 
-    @patch("calorie_track_ai_bot.api.v1.estimates.db_get_estimate")
-    def test_get_estimate_not_found(self, mock_db_get, client):
-        """Test estimate retrieval when estimate doesn't exist."""
+    @patch("calorie_track_ai_bot.api.v1.estimates.db_get_user_estimate")
+    def test_get_estimate_not_found_or_not_owned(self, mock_db_get, client):
+        """Missing estimates and other users' estimates both return 404."""
         mock_db_get.return_value = None
 
+        response = client.get(f"/estimates/{ESTIMATE_ID}")
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Not found"
+
+    @patch("calorie_track_ai_bot.api.v1.estimates.db_get_user_estimate")
+    def test_get_estimate_malformed_id_returns_404(self, mock_db_get, client):
+        """Non-UUID IDs are rejected without a database lookup."""
         response = client.get("/estimates/nonexistent")
 
         assert response.status_code == 404
-        data = response.json()
-        assert data["detail"] == "Not found"
+        mock_db_get.assert_not_called()
 
-    @patch("calorie_track_ai_bot.api.v1.estimates.db_get_estimate")
+    @patch("calorie_track_ai_bot.api.v1.estimates.db_get_user_estimate")
     def test_get_estimate_db_error(self, mock_db_get, client):
         """Test estimate retrieval when database operation fails."""
         mock_db_get.side_effect = Exception("Database Error")
 
-        response = client.get("/estimates/estimate123")
+        response = client.get(f"/estimates/{ESTIMATE_ID}")
 
-        # Should propagate the error
         assert response.status_code == 500
 
     def test_get_estimate_methods(self, client):
         """Test that get estimate only accepts GET requests."""
-        post_response = client.post("/estimates/estimate123")
-        assert post_response.status_code == 405  # Method Not Allowed
+        assert client.post(f"/estimates/{ESTIMATE_ID}").status_code == 405
+        assert client.put(f"/estimates/{ESTIMATE_ID}").status_code == 405
+        assert client.delete(f"/estimates/{ESTIMATE_ID}").status_code == 405
 
-        put_response = client.put("/estimates/estimate123")
-        assert put_response.status_code == 405
-
-        delete_response = client.delete("/estimates/estimate123")
-        assert delete_response.status_code == 405
-
-    @patch("calorie_track_ai_bot.api.v1.estimates.db_get_estimate")
-    def test_get_estimate_different_ids(self, mock_db_get, client):
-        """Test estimate retrieval with different estimate IDs."""
-        test_cases = [
-            "estimate123",
-            "estimate456",
-            "550e8400-e29b-41d4-a716-446655440000",
-            "test-estimate-789",
-        ]
-
-        for estimate_id in test_cases:
-            estimate_data = {
-                "id": estimate_id,
-                "photo_id": "photo123",
-                "kcal_mean": 300,
-                "kcal_min": 250,
-                "kcal_max": 350,
-                "confidence": 0.7,
-                "breakdown": [],
-                "status": "done",
-            }
-            mock_db_get.return_value = estimate_data
-
-            response = client.get(f"/estimates/{estimate_id}")
-
-            assert response.status_code == 200
-            data = response.json()
-            assert data["id"] == estimate_id
-
-    def test_estimate_endpoints_content_type(self, client):
+    def test_estimate_endpoints_content_type(self, client, owned_photo):
         """Test that estimate endpoints return JSON content type."""
         with (
             patch("calorie_track_ai_bot.api.v1.estimates.enqueue_estimate_job") as mock_enqueue,
-            patch("calorie_track_ai_bot.api.v1.estimates.db_get_estimate") as mock_db_get,
+            patch("calorie_track_ai_bot.api.v1.estimates.db_get_user_estimate") as mock_db_get,
         ):
-            mock_enqueue.return_value = "photo123"
+            mock_enqueue.return_value = "job123"
+            mock_db_get.return_value = make_estimate()
 
-            mock_db_get.return_value = {
-                "id": "estimate123",
-                "photo_id": "photo123",
-                "kcal_mean": 300,
-                "kcal_min": 250,
-                "kcal_max": 350,
-                "confidence": 0.7,
-                "breakdown": [],
-                "status": "done",
-            }
-
-            # Test POST endpoint
-            post_response = client.post("/photos/photo123/estimate")
+            post_response = client.post(f"/photos/{PHOTO_ID}/estimate")
             assert post_response.headers["content-type"] == "application/json"
 
-            # Test GET endpoint
-            get_response = client.get("/estimates/estimate123")
+            get_response = client.get(f"/estimates/{ESTIMATE_ID}")
             assert get_response.headers["content-type"] == "application/json"
 
-    @patch("calorie_track_ai_bot.api.v1.estimates.enqueue_estimate_job")
-    def test_estimate_photo_response_structure(self, mock_enqueue, client):
-        """Test that estimate photo returns consistent response structure."""
-        mock_enqueue.return_value = "photo123"
 
-        response = client.post("/photos/photo123/estimate")
-        data = response.json()
+class TestEstimatesRequireRegisteredUser:
+    """Without a registered user, the endpoints refuse the request."""
 
-        # Should be valid JSON
-        assert isinstance(data, dict)
+    @pytest.fixture
+    def client(self):
+        app = FastAPI()
+        app.include_router(router)
+        return TestClient(app)
 
-        # Should have required fields
-        assert "estimate_id" in data
-        assert "status" in data
+    def test_estimate_photo_without_auth_returns_401(self, client):
+        assert client.post(f"/photos/{PHOTO_ID}/estimate").status_code == 401
 
-        # Values should be strings
-        assert isinstance(data["estimate_id"], str)
-        assert isinstance(data["status"], str)
+    def test_get_estimate_without_auth_returns_401(self, client):
+        assert client.get(f"/estimates/{ESTIMATE_ID}").status_code == 401
 
-        # Status should be "queued"
-        assert data["status"] == "queued"
+    def test_unregistered_user_returns_403(self, client, registered_user):
+        registered_user.return_value = None
+        response = client.get(f"/estimates/{ESTIMATE_ID}", headers={"x-user-id": "59357664"})
+        assert response.status_code == 403

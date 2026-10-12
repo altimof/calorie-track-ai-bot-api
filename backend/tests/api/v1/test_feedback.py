@@ -248,8 +248,8 @@ class TestFeedbackSubmissionContract:
 
             assert response.status_code == 201
 
-    def test_submit_feedback_with_invalid_user_returns_404(self):
-        """Test that feedback submission with invalid user ID returns 404."""
+    def test_submit_feedback_with_unregistered_user_returns_403(self):
+        """Test that feedback submission from an unregistered user returns 403."""
         with patch("src.calorie_track_ai_bot.api.v1.deps.resolve_user_id") as mock_resolve:
             mock_resolve.return_value = None  # User not found
 
@@ -264,8 +264,8 @@ class TestFeedbackSubmissionContract:
                 headers={"x-user-id": "invalid_user"},
             )
 
-            assert response.status_code == 404
-            assert "user not found" in response.json()["detail"].lower()
+            assert response.status_code == 403
+            assert response.json()["detail"] == "User not registered"
 
 
 class TestFeedbackRetrievalContract:

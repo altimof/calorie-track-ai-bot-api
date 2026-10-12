@@ -5,7 +5,10 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
+from calorie_track_ai_bot.api.v1.deps import get_authenticated_user_id
 from calorie_track_ai_bot.api.v1.photos import router
+
+USER_ID = "1d882190-ac3f-4a06-8a44-20e46bafb9a5"
 
 
 class TestPhotosEndpoints:
@@ -13,11 +16,12 @@ class TestPhotosEndpoints:
 
     @pytest.fixture
     def client(self):
-        """Create test client."""
+        """Test client whose requests come from USER_ID."""
         from fastapi import FastAPI
 
         app = FastAPI()
         app.include_router(router)
+        app.dependency_overrides[get_authenticated_user_id] = lambda: USER_ID
         return TestClient(app)
 
     @patch("calorie_track_ai_bot.api.v1.photos.tigris_presign_put")
@@ -33,6 +37,7 @@ class TestPhotosEndpoints:
         response = client.post("/photos", json=payload)
 
         assert response.status_code == 200
+        mock_db_create.assert_awaited_once_with(tigris_key="photos/test123.jpg", user_id=USER_ID)
         data = response.json()
 
         # Check response structure
@@ -169,3 +174,32 @@ class TestPhotosEndpoints:
 
         # photo_id should be the same as the key from presign
         assert data["photo_id"] == "photo-uuid-structure"
+
+
+class TestPhotosRequireRegisteredUser:
+    """Without a registered user, no upload URL is handed out."""
+
+    @pytest.fixture
+    def client(self):
+        from fastapi import FastAPI
+
+        app = FastAPI()
+        app.include_router(router)
+        return TestClient(app)
+
+    @patch("calorie_track_ai_bot.api.v1.photos.tigris_presign_put")
+    def test_create_photo_without_auth_returns_401(self, mock_presign, client):
+        response = client.post("/photos", json={"content_type": "image/jpeg"})
+        assert response.status_code == 401
+        mock_presign.assert_not_called()
+
+    @patch("calorie_track_ai_bot.api.v1.photos.tigris_presign_put")
+    def test_create_photo_unregistered_user_returns_403(
+        self, mock_presign, client, registered_user
+    ):
+        registered_user.return_value = None
+        response = client.post(
+            "/photos", json={"content_type": "image/jpeg"}, headers={"x-user-id": "59357664"}
+        )
+        assert response.status_code == 403
+        mock_presign.assert_not_called()

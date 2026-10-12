@@ -39,3 +39,15 @@ async def db_get_photo(photo_id: str) -> dict[str, Any] | None:
         cur = await conn.execute("SELECT * FROM photos WHERE id = %s", (photo_id,))
         row = await cur.fetchone()
         return dict(row) if row else None
+
+
+async def db_get_user_photo(photo_id: str, user_id: str) -> dict[str, Any] | None:
+    """Get a photo record by ID only if it belongs to the given user."""
+    pool = await database.get_pool()
+
+    async with pool.connection() as conn:
+        cur = await conn.execute(
+            "SELECT * FROM photos WHERE id = %s AND user_id = %s", (photo_id, user_id)
+        )
+        row = await cur.fetchone()
+        return dict(row) if row else None

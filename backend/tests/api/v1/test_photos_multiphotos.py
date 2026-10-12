@@ -112,7 +112,7 @@ async def test_create_empty_photos_list(api_client, authenticated_headers):
 
 @pytest.mark.asyncio
 async def test_create_photos_without_auth(api_client, mock_db_pool):
-    """Test POST /api/v1/photos without authentication still works (endpoint is public)."""
+    """Test POST /api/v1/photos without authentication is rejected before any upload URL."""
     payload = {"photos": [{"content_type": "image/jpeg"}]}
 
     # Mock the storage and database functions
@@ -125,8 +125,8 @@ async def test_create_photos_without_auth(api_client, mock_db_pool):
     ):
         response = api_client.post("/api/v1/photos", json=payload)
 
-    # Photos endpoint is public - it just creates upload URLs
-    assert response.status_code == 200
+    # Upload URLs are only handed out to registered users
+    assert response.status_code == 401
 
 
 @pytest.mark.asyncio

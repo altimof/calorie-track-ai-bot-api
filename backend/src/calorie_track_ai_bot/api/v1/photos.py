@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from ...schemas import (
     MultiPhotoCreateRequest,
@@ -10,17 +10,22 @@ from ...schemas import (
 from ...services.config import logger
 from ...services.db import db_create_photo
 from ...services.storage import tigris_presign_put
+from .deps import get_authenticated_user_id
 
 router = APIRouter()
 
 
 @router.post("/photos", response_model=PresignResponse | MultiPhotoResponse)
-async def create_photo(body: PhotoCreateRequest | MultiPhotoCreateRequest):
+async def create_photo(
+    body: PhotoCreateRequest | MultiPhotoCreateRequest,
+    user_id: str = Depends(get_authenticated_user_id),
+):
     """
     Create photo upload request(s) with support for both single and multi-photo uploads.
 
     For single photo: Send {"content_type": "image/jpeg"}
     For multiple photos: Send {"photos": [{"content_type": "image/jpeg"}, ...]}
+    The photos are owned by the requesting user.
     """
 
     # Check if this is a multi-photo request using isinstance
@@ -36,7 +41,7 @@ async def create_photo(body: PhotoCreateRequest | MultiPhotoCreateRequest):
                 key, url = await tigris_presign_put(content_type=photo_request.content_type)
                 logger.debug(f"Generated presigned URL for photo {i + 1}: {key}")
 
-                photo_id = await db_create_photo(tigris_key=key)
+                photo_id = await db_create_photo(tigris_key=key, user_id=user_id)
                 logger.info(f"Photo {i + 1} record created with ID: {photo_id}")
 
                 successful_photos.append(PhotoInfo(id=photo_id, upload_url=url, file_key=key))
@@ -65,7 +70,7 @@ async def create_photo(body: PhotoCreateRequest | MultiPhotoCreateRequest):
             key, url = await tigris_presign_put(content_type=body.content_type)
             logger.debug(f"Generated presigned URL for key: {key}")
 
-            photo_id = await db_create_photo(tigris_key=key)
+            photo_id = await db_create_photo(tigris_key=key, user_id=user_id)
             logger.info(f"Photo record created with ID: {photo_id}")
 
             return PresignResponse(photo_id=photo_id, upload_url=url)

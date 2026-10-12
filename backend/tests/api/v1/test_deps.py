@@ -1,9 +1,10 @@
-"""Tests for Telegram initData authentication in get_telegram_user_id."""
+"""Tests for Telegram initData authentication and the registered-user check."""
 
 import hashlib
 import hmac
 import json
 import time
+from unittest.mock import AsyncMock, patch
 from urllib.parse import urlencode
 
 import pytest
@@ -100,3 +101,57 @@ class TestInsecureHeaderFlag:
             headers={"authorization": "tma user=x&hash=bad", "x-user-id": "59357664"},
         )
         assert response.status_code == 401
+
+
+@pytest.mark.usefixtures("secure")
+class TestRegisteredUsersOnly:
+    def test_registered_user_is_resolved_by_telegram_id(self, registered_user):
+        response = client.get("/whoami", headers={"authorization": f"tma {signed_init_data()}"})
+        assert response.status_code == 200
+        registered_user.assert_awaited_once_with("59357664")
+
+    def test_unregistered_user_with_valid_init_data_gets_403(self, registered_user):
+        registered_user.return_value = None
+        response = client.get("/whoami", headers={"authorization": f"tma {signed_init_data()}"})
+        assert response.status_code == 403
+        assert response.json()["detail"] == "User not registered"
+
+    def test_unregistered_user_via_insecure_header_gets_403(self, registered_user, monkeypatch):
+        monkeypatch.setattr(config, "ALLOW_INSECURE_USER_ID_HEADER", True)
+        registered_user.return_value = None
+        response = client.get("/whoami", headers={"x-user-id": "59357664"})
+        assert response.status_code == 403
+
+
+class TestResolveUserIdLookupOnly:
+    @pytest.mark.asyncio
+    async def test_unknown_telegram_user_is_not_created(self):
+        from calorie_track_ai_bot.services.db import _base
+
+        _base._user_id_cache.clear()
+        with (
+            patch(
+                "calorie_track_ai_bot.services.db.users.db_find_user_id",
+                AsyncMock(return_value=None),
+            ) as find,
+            patch("calorie_track_ai_bot.services.db.users.db_get_or_create_user") as create,
+        ):
+            assert await _base.resolve_user_id("59357664") is None
+        find.assert_awaited_once_with(59357664)
+        create.assert_not_called()
+        assert "59357664" not in _base._user_id_cache
+
+    @pytest.mark.asyncio
+    async def test_registered_telegram_user_is_cached(self):
+        from calorie_track_ai_bot.services.db import _base
+
+        _base._user_id_cache.clear()
+        user_uuid = "1d882190-ac3f-4a06-8a44-20e46bafb9a5"
+        with patch(
+            "calorie_track_ai_bot.services.db.users.db_find_user_id",
+            AsyncMock(return_value=user_uuid),
+        ) as find:
+            assert await _base.resolve_user_id("59357664") == user_uuid
+            assert await _base.resolve_user_id("59357664") == user_uuid
+        find.assert_awaited_once()
+        _base._user_id_cache.clear()

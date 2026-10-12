@@ -1,5 +1,5 @@
 from ._base import resolve_user_id
-from .estimates import db_get_estimate, db_save_estimate
+from .estimates import db_get_estimate, db_get_user_estimate, db_save_estimate
 from .goals import db_create_or_update_goal, db_get_goal
 from .inline_analytics import (
     db_fetch_inline_analytics,
@@ -21,7 +21,7 @@ from .meals import (
     db_update_meal,
     db_update_meal_with_macros,
 )
-from .photos import db_create_photo, db_get_photo
+from .photos import db_create_photo, db_get_photo, db_get_user_photo
 from .summaries import db_get_daily_summary, db_get_summaries_by_date_range, db_get_today_data
 from .ui_config import (
     db_cleanup_old_ui_configurations,
@@ -58,6 +58,8 @@ __all__ = [
     "db_get_ui_configuration",
     "db_get_ui_configurations_by_user",
     "db_get_user",
+    "db_get_user_estimate",
+    "db_get_user_photo",
     "db_increment_inline_permission_block",
     "db_save_estimate",
     "db_update_meal",
