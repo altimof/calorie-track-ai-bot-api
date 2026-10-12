@@ -95,7 +95,17 @@ VITE_API_BASE_URL=http://localhost:8000
 VITE_DEV_USER_ID=123456789
 ```
 
-### 3. Start Development Servers
+### 3. Set Up the Database Schema
+
+A fresh Neon (or any Postgres) database starts empty — there is no migration tool, so the schema must be applied manually before first use:
+
+```bash
+psql "$DATABASE_URL" -f backend/infra/schema.sql
+```
+
+Skipping this step leaves tables like `users` and `photos` missing, which surfaces as `psycopg.errors.UndefinedTable: relation "users" does not exist` the first time the bot processes a message. See `backend/infra/schema.sql` and [database-schema-changes.md](database-schema-changes.md) for details, and re-run it after pulling schema changes.
+
+### 4. Start Development Servers
 
 ```bash
 # Start both backend and frontend
@@ -291,6 +301,10 @@ If you have port conflicts:
 ## Production Deployment
 
 Deployments normally happen automatically from GitHub Actions on push to `main` (`backend-ci.yml` -> `backend-build.yml` -> `backend-deploy.yml`, and `frontend-ci.yml` -> `frontend-deploy.yml`). Manual deploys:
+
+> **New Neon project?** Apply the schema before the first deploy — it is not run automatically: `psql "$DATABASE_URL" -f backend/infra/schema.sql`. Without it, the deployed backend starts and passes health checks, but any message the bot processes fails with `relation "users" does not exist`.
+
+> **Deploying your own fork?** Set the `CORS_ORIGINS` secret on your backend to your frontend's actual URL (e.g. `fly secrets set CORS_ORIGINS=https://your-frontend.vercel.app,https://t.me`). With `APP_ENV=production` and no `CORS_ORIGINS` set, the backend defaults to allowing only this repo's own Vercel domain — your Mini App will load, but every API call is silently blocked by CORS, so pages like meals/goals/statistics appear empty with nothing obviously wrong in the backend logs. See `get_cors_origins()` in `backend/src/calorie_track_ai_bot/services/config.py`.
 
 ### Backend (Fly.io)
 ```bash
