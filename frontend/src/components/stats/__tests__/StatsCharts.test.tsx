@@ -66,6 +66,24 @@ describe("StatsCharts", () => {
     expect(screen.getByText(/7/)).toBeInTheDocument();
   });
 
+  it("rounds macro grams and percentages to two decimals", () => {
+    renderWithProviders(
+      <StatsCharts
+        dailyStats={mockDailyStats}
+        macroStats={{
+          ...mockMacroStats,
+          protein_percent: 17.599999999999998,
+          fat_percent: 54,
+          carbs_percent: 29.123456,
+          protein_grams: 55.000000001,
+        }}
+      />,
+    );
+    expect(screen.getByText(/55g \(17\.6%\)/)).toBeInTheDocument();
+    expect(screen.getByText(/65g \(54%\)/)).toBeInTheDocument();
+    expect(screen.getByText(/210g \(29\.12%\)/)).toBeInTheDocument();
+  });
+
   it("renders empty state when no data", () => {
     const emptyDaily: DailyStatisticsResponse = {
       data: [],
