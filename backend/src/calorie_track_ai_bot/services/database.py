@@ -25,7 +25,16 @@ async def get_pool() -> AsyncConnectionPool:
             conninfo=dsn,
             min_size=2,
             max_size=10,
-            kwargs={"row_factory": dict_row},
+            kwargs={
+                "row_factory": dict_row,
+                "connect_timeout": 10,
+                # Detect connections silently dropped by the network/pooler (e.g. after
+                # this process was suspended) instead of hanging forever on recv().
+                "keepalives": 1,
+                "keepalives_idle": 10,
+                "keepalives_interval": 5,
+                "keepalives_count": 3,
+            },
             check=AsyncConnectionPool.check_connection,
             max_idle=300,
         )
