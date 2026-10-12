@@ -1,5 +1,41 @@
 import { describe, it, expect } from "vitest";
-import { getDateRange } from "../date";
+import { eachDate, getDateRange, parseLocalDate } from "../date";
+
+describe("parseLocalDate", () => {
+  it("parses a calendar date as local midnight, not UTC", () => {
+    const d = parseLocalDate("2026-10-11");
+    expect([d.getFullYear(), d.getMonth(), d.getDate(), d.getHours()]).toEqual([
+      2026, 9, 11, 0,
+    ]);
+  });
+});
+
+describe("eachDate", () => {
+  it("lists every date from start up to, not including, end", () => {
+    expect(eachDate("2026-10-09", "2026-10-12")).toEqual([
+      "2026-10-09",
+      "2026-10-10",
+      "2026-10-11",
+    ]);
+  });
+
+  it("crosses month and year boundaries", () => {
+    expect(eachDate("2026-12-30", "2027-01-02")).toEqual([
+      "2026-12-30",
+      "2026-12-31",
+      "2027-01-01",
+    ]);
+  });
+
+  it("returns nothing for an empty range", () => {
+    expect(eachDate("2026-10-11", "2026-10-11")).toEqual([]);
+  });
+
+  it("matches the statistics period length", () => {
+    const { start_date, end_date } = getDateRange(90, new Date(2026, 9, 11));
+    expect(eachDate(start_date, end_date)).toHaveLength(90);
+  });
+});
 
 describe("getDateRange", () => {
   // The statistics API treats end_date as exclusive.
