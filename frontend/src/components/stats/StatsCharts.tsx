@@ -22,6 +22,11 @@ interface StatsChartsProps {
 
 const MACRO_COLORS = ["#4CAF50", "#FF9800", "#2196F3"];
 
+// At most two decimal places, without trailing zeros (17.599999999999998 -> 17.6)
+function formatMacroValue(value: number): string {
+  return String(Math.round(value * 100) / 100);
+}
+
 export function StatsCharts({ dailyStats, macroStats }: StatsChartsProps) {
   const { t } = useTranslation();
 
@@ -136,16 +141,19 @@ export function StatsCharts({ dailyStats, macroStats }: StatsChartsProps) {
             </ResponsiveContainer>
             <div className="flex flex-col gap-1 text-sm">
               <span style={{ color: MACRO_COLORS[0] }}>
-                {t("statistics.chart.protein")}: {macroStats.protein_grams}g (
-                {macroStats.protein_percent}%)
+                {t("statistics.chart.protein")}:{" "}
+                {formatMacroValue(macroStats.protein_grams)}g (
+                {formatMacroValue(macroStats.protein_percent)}%)
               </span>
               <span style={{ color: MACRO_COLORS[1] }}>
-                {t("statistics.chart.fat")}: {macroStats.fat_grams}g (
-                {macroStats.fat_percent}%)
+                {t("statistics.chart.fat")}:{" "}
+                {formatMacroValue(macroStats.fat_grams)}g (
+                {formatMacroValue(macroStats.fat_percent)}%)
               </span>
               <span style={{ color: MACRO_COLORS[2] }}>
-                {t("statistics.chart.carbs")}: {macroStats.carbs_grams}g (
-                {macroStats.carbs_percent}%)
+                {t("statistics.chart.carbs")}:{" "}
+                {formatMacroValue(macroStats.carbs_grams)}g (
+                {formatMacroValue(macroStats.carbs_percent)}%)
               </span>
             </div>
           </div>
