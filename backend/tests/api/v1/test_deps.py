@@ -56,6 +56,10 @@ class TestInitDataAuth:
         response = client.get("/whoami", headers={"authorization": f"TMA {signed_init_data()}"})
         assert response.status_code == 200
 
+    def test_extra_whitespace_after_scheme_accepted(self):
+        response = client.get("/whoami", headers={"authorization": f"tma   {signed_init_data()}"})
+        assert response.status_code == 200
+
     def test_init_data_wins_over_x_user_id(self):
         response = client.get(
             "/whoami",

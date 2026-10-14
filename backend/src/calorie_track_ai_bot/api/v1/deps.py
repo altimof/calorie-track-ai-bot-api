@@ -6,12 +6,11 @@ Provides reusable dependency functions for authentication and user resolution.
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import HTTPException, Request
+from fastapi.security.utils import get_authorization_scheme_param
 
 from ...services import config
 from ...services.db import resolve_user_id
 from ...services.telegram_auth import InitDataError, validate_init_data
-
-INIT_DATA_SCHEME = "tma "
 
 
 def _identify_telegram_user(request: Request) -> str:
@@ -20,15 +19,13 @@ def _identify_telegram_user(request: Request) -> str:
     initData is sent as `Authorization: tma <initData>`. If it is absent and
     ALLOW_INSECURE_USER_ID_HEADER is on, the unsigned x-user-id header is used.
     """
-    authorization = request.headers.get("authorization", "")
-    if authorization[: len(INIT_DATA_SCHEME)].lower() == INIT_DATA_SCHEME:
+    scheme, init_data = get_authorization_scheme_param(request.headers.get("authorization"))
+    if scheme.lower() == "tma":
         if not config.TELEGRAM_BOT_TOKEN:
             config.logger.error("Cannot validate initData: TELEGRAM_BOT_TOKEN not configured")
             raise HTTPException(status_code=500, detail="Authentication not configured")
         try:
-            user_id = validate_init_data(
-                authorization[len(INIT_DATA_SCHEME) :].strip(), config.TELEGRAM_BOT_TOKEN
-            )
+            user_id = validate_init_data(init_data, config.TELEGRAM_BOT_TOKEN)
         except InitDataError as e:
             config.logger.warning(f"Rejected initData: {e}")
             raise HTTPException(status_code=401, detail="Invalid Telegram initData") from e
