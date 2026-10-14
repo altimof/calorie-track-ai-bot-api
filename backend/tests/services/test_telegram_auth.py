@@ -62,6 +62,11 @@ class TestValidateInitData:
         signed = sign(make_fields(auth_date=NOW - INIT_DATA_MAX_AGE_SECONDS))
         assert validate_init_data(signed, BOT_TOKEN, now=NOW) == 59357664
 
+    def test_non_ascii_hash_rejected(self):
+        fields = urlencode(make_fields())
+        with pytest.raises(InitDataError, match="signature"):
+            validate_init_data(f"{fields}&hash=%C3%A9", BOT_TOKEN, now=NOW)
+
     def test_missing_hash_rejected(self):
         with pytest.raises(InitDataError, match="no hash"):
             validate_init_data(urlencode(make_fields()), BOT_TOKEN, now=NOW)

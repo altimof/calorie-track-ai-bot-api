@@ -75,6 +75,8 @@ services:
       # Telegram Configuration (optional for development)
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       USE_WEBHOOK: false
+      # The dev frontend outside Telegram sends x-user-id instead of initData
+      ALLOW_INSECURE_USER_ID_HEADER: ${ALLOW_INSECURE_USER_ID_HEADER:-true}
 
       # OpenAI Configuration (optional for development)
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}

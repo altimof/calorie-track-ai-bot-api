@@ -7,6 +7,7 @@ import hashlib
 import hmac
 import json
 import time
+from functools import lru_cache
 from urllib.parse import parse_qsl
 
 # Telegram re-signs initData each time the Mini App is opened
@@ -15,6 +16,11 @@ INIT_DATA_MAX_AGE_SECONDS = 24 * 60 * 60
 
 class InitDataError(ValueError):
     """initData is malformed, has a bad signature, or is expired."""
+
+
+@lru_cache(maxsize=4)
+def _secret_key(bot_token: str) -> bytes:
+    return hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
 
 
 def validate_init_data(
@@ -44,9 +50,10 @@ def validate_init_data(
         raise InitDataError("initData has no hash")
 
     data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(fields.items()))
-    secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
-    expected_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(expected_hash, received_hash):
+    expected_hash = hmac.new(
+        _secret_key(bot_token), data_check_string.encode(), hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(expected_hash.encode(), received_hash.encode()):
         raise InitDataError("initData signature mismatch")
 
     try:

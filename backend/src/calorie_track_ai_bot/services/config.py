@@ -51,6 +51,11 @@ TELEGRAM_BOT_TOKEN: str | None = os.getenv("TELEGRAM_BOT_TOKEN")
 ALLOW_INSECURE_USER_ID_HEADER: bool = (
     os.getenv("ALLOW_INSECURE_USER_ID_HEADER", "false").lower() == "true"
 )
+if ALLOW_INSECURE_USER_ID_HEADER and APP_ENV == "production":
+    logger.warning(
+        "ALLOW_INSECURE_USER_ID_HEADER is on in production: the unsigned x-user-id "
+        "header is trusted, so any client can act as any user"
+    )
 
 # Inline mode configuration
 INLINE_MODE_ENABLED: bool = os.getenv("INLINE_MODE_ENABLED", "false").lower() == "true"
