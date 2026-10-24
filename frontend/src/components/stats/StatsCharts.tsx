@@ -26,8 +26,8 @@ interface StatsChartsProps {
 
 const MACRO_COLORS = ["#4CAF50", "#FF9800", "#2196F3"];
 
-function formatChartDate(date: string): string {
-  return parseLocalDate(date).toLocaleDateString(undefined, {
+function formatChartDate(date: string, language: string): string {
+  return parseLocalDate(date).toLocaleDateString(language, {
     month: "short",
     day: "numeric",
   });
@@ -36,6 +36,7 @@ function formatChartDate(date: string): string {
 export function StatsCharts({ dailyStats, macroStats }: StatsChartsProps) {
   const { t, i18n } = useTranslation();
   const formatNumber = (value: number) => formatDecimal(value, i18n.language);
+  const formatDate = (date: string) => formatChartDate(date, i18n.language);
   const formatGrams = (value: number) =>
     t("common.grams", { value: formatNumber(value) });
 
@@ -89,14 +90,14 @@ export function StatsCharts({ dailyStats, macroStats }: StatsChartsProps) {
           <BarChart data={chartData}>
             <XAxis
               dataKey="date"
-              tickFormatter={formatChartDate}
+              tickFormatter={formatDate}
               tick={{ fontSize: 10 }}
             />
             <YAxis tick={{ fontSize: 10 }} />
             <Tooltip
-              labelFormatter={(date) => formatChartDate(String(date))}
+              labelFormatter={(date) => formatDate(String(date))}
               formatter={(kcal) => [
-                Math.round(Number(kcal)),
+                formatNumber(Math.round(Number(kcal))),
                 t("statistics.chart.calories"),
               ]}
             />
