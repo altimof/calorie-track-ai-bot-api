@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import type { MealWithPhotos } from "@/api/model";
+import { formatDecimal } from "@/utils/number";
 
 interface MealCardProps {
   meal: MealWithPhotos;
@@ -15,7 +16,9 @@ function formatTime(dateString: string): string {
 }
 
 export function MealCard({ meal, onEdit, onDelete }: MealCardProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const formatGrams = (value: number) =>
+    t("common.grams", { value: formatDecimal(value, i18n.language) });
   const thumbnail = meal.photos?.[0]?.thumbnailUrl;
 
   return (
@@ -40,9 +43,9 @@ export function MealCard({ meal, onEdit, onDelete }: MealCardProps) {
           </span>
         </div>
         <div className="flex items-center gap-2 text-xs text-tg-hint">
-          <span>P: {meal.macronutrients.protein}g</span>
-          <span>C: {meal.macronutrients.carbs}g</span>
-          <span>F: {meal.macronutrients.fats}g</span>
+          <span>P: {formatGrams(meal.macronutrients.protein)}</span>
+          <span>C: {formatGrams(meal.macronutrients.carbs)}</span>
+          <span>F: {formatGrams(meal.macronutrients.fats)}</span>
         </div>
         <div className="flex justify-end gap-2">
           <button

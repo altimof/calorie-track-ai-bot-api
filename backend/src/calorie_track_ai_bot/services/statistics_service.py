@@ -166,10 +166,14 @@ class StatisticsService:
             fat_percent = 0.0
             carbs_percent = 0.0
 
-            if total_calories > 0:
-                protein_percent = (total_protein * 4 / total_calories) * 100
-                fat_percent = (total_fat * 9 / total_calories) * 100
-                carbs_percent = (total_carbs * 4 / total_calories) * 100
+            # Shares of the calories from macros, not of kcal_total: the AI's kcal_total
+            # rarely equals protein*4 + fat*9 + carbs*4, so dividing by it gave shares
+            # that don't add up to 100 and could exceed the response's 100% limit.
+            macro_calories = total_protein * 4 + total_fat * 9 + total_carbs * 4
+            if macro_calories > 0:
+                protein_percent = round(total_protein * 4 / macro_calories * 100, 2)
+                fat_percent = round(total_fat * 9 / macro_calories * 100, 2)
+                carbs_percent = round(total_carbs * 4 / macro_calories * 100, 2)
 
             period = StatisticsPeriod(
                 start_date=start_date,

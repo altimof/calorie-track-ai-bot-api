@@ -17,6 +17,7 @@ import type {
 } from "@/api/model";
 import { parseLocalDate } from "@/utils/date";
 import { dailyCalories } from "./chartData";
+import { formatDecimal } from "@/utils/number";
 
 interface StatsChartsProps {
   dailyStats: DailyStatisticsResponse;
@@ -24,11 +25,6 @@ interface StatsChartsProps {
 }
 
 const MACRO_COLORS = ["#4CAF50", "#FF9800", "#2196F3"];
-
-// At most two decimal places, without trailing zeros (17.599999999999998 -> 17.6)
-function formatMacroValue(value: number): string {
-  return String(Math.round(value * 100) / 100);
-}
 
 function formatChartDate(date: string): string {
   return parseLocalDate(date).toLocaleDateString(undefined, {
@@ -38,7 +34,10 @@ function formatChartDate(date: string): string {
 }
 
 export function StatsCharts({ dailyStats, macroStats }: StatsChartsProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const formatNumber = (value: number) => formatDecimal(value, i18n.language);
+  const formatGrams = (value: number) =>
+    t("common.grams", { value: formatNumber(value) });
 
   if (dailyStats.data.length === 0) {
     return (
@@ -155,18 +154,17 @@ export function StatsCharts({ dailyStats, macroStats }: StatsChartsProps) {
             <div className="flex flex-col gap-1 text-sm">
               <span style={{ color: MACRO_COLORS[0] }}>
                 {t("statistics.chart.protein")}:{" "}
-                {formatMacroValue(macroStats.protein_grams)}g (
-                {formatMacroValue(macroStats.protein_percent)}%)
+                {formatGrams(macroStats.protein_grams)} (
+                {formatNumber(macroStats.protein_percent)}%)
               </span>
               <span style={{ color: MACRO_COLORS[1] }}>
-                {t("statistics.chart.fat")}:{" "}
-                {formatMacroValue(macroStats.fat_grams)}g (
-                {formatMacroValue(macroStats.fat_percent)}%)
+                {t("statistics.chart.fat")}: {formatGrams(macroStats.fat_grams)}{" "}
+                ({formatNumber(macroStats.fat_percent)}%)
               </span>
               <span style={{ color: MACRO_COLORS[2] }}>
                 {t("statistics.chart.carbs")}:{" "}
-                {formatMacroValue(macroStats.carbs_grams)}g (
-                {formatMacroValue(macroStats.carbs_percent)}%)
+                {formatGrams(macroStats.carbs_grams)} (
+                {formatNumber(macroStats.carbs_percent)}%)
               </span>
             </div>
           </div>

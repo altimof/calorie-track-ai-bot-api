@@ -41,6 +41,26 @@ describe("MealCard", () => {
     expect(screen.getByText(/F: 12g/)).toBeInTheDocument();
   });
 
+  it("rounds macros to two decimals", () => {
+    renderWithProviders(
+      <MealCard
+        meal={{
+          ...mockMeal,
+          macronutrients: {
+            protein: 35.555,
+            carbs: 0.1 + 0.2,
+            fats: 12.000000001,
+          },
+        }}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("P: 35.56g")).toBeInTheDocument();
+    expect(screen.getByText("C: 0.3g")).toBeInTheDocument();
+    expect(screen.getByText("F: 12g")).toBeInTheDocument();
+  });
+
   it("shows thumbnail when photo exists", () => {
     renderWithProviders(
       <MealCard meal={mockMeal} onEdit={vi.fn()} onDelete={vi.fn()} />,

@@ -15,13 +15,16 @@ import { Modal } from "@/components/ui/Modal";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { unwrap } from "@/api/unwrap";
 import { formatDate } from "@/utils/date";
+import { formatDecimal } from "@/utils/number";
 import type { MealWithPhotos } from "@/api/model";
 import type { MealsListResponse } from "@/api/model";
 import type { DailySummary } from "@/api/model";
 import type { GoalResponse } from "@/api/model";
 
 export default function MealsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const formatGrams = (value: number) =>
+    t("common.grams", { value: formatDecimal(value, i18n.language) });
   const queryClient = useQueryClient();
   const [selectedDate] = useState(formatDate(new Date()));
   const [editingMeal, setEditingMeal] = useState<MealWithPhotos | null>(null);
@@ -134,13 +137,16 @@ export default function MealsPage() {
           </div>
           <div className="flex gap-4 text-xs text-tg-hint">
             <span>
-              {t("today.macros.protein")}: {summary.macros_totals.protein_g}g
+              {t("today.macros.protein")}:{" "}
+              {formatGrams(summary.macros_totals.protein_g)}
             </span>
             <span>
-              {t("today.macros.fat")}: {summary.macros_totals.fat_g}g
+              {t("today.macros.fat")}:{" "}
+              {formatGrams(summary.macros_totals.fat_g)}
             </span>
             <span>
-              {t("today.macros.carbs")}: {summary.macros_totals.carbs_g}g
+              {t("today.macros.carbs")}:{" "}
+              {formatGrams(summary.macros_totals.carbs_g)}
             </span>
           </div>
         </div>

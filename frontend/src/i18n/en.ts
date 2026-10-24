@@ -211,6 +211,7 @@ const en = {
     retry: "Retry",
     sessionExpired:
       "Your session has expired. Please reopen the app to continue.",
+    grams: "{{value}}g",
   },
   share: {
     button: "Share",
