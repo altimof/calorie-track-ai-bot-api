@@ -327,15 +327,12 @@ The backend authenticates Mini App requests with Telegram `initData`, so product
 
 #### Rolling out initData authentication
 
-Frontends built before initData authentication send only `x-user-id`; a backend with initData authentication rejects them unless the flag is on. Roll out in this order:
+Frontends built before initData authentication send only `x-user-id`; a backend with initData authentication rejects them unless the flag is on. `deploy.yml` deploys the backend before the frontend, and Mini Apps that are already open keep running the old frontend, so turn the flag on for the release that ships this change:
 
-1. Turn the flag on: `flyctl secrets set ALLOW_INSECURE_USER_ID_HEADER=true -a calorize-me-bot`.
-2. Deploy the backend and check that the current frontend still works.
-3. Deploy the frontend. Open the Mini App from Telegram and check in the browser dev tools that requests carry `Authorization: tma ...` and succeed.
-4. Turn the flag off: `flyctl secrets unset ALLOW_INSECURE_USER_ID_HEADER -a calorize-me-bot`.
-5. Fully close and reopen the Mini App in Telegram, and check that it still loads your data.
-
-Deploy the backend before the frontend: a frontend with initData authentication sends no `x-user-id`, so the old backend rejects all of its requests.
+1. Before publishing the release, turn the flag on: `flyctl secrets set ALLOW_INSECURE_USER_ID_HEADER=true -a calorie-track-ai-bot`.
+2. Merge the change, then merge the release PR to publish the release.
+3. After `deploy.yml` finishes, open the Mini App from Telegram and check in the browser dev tools that requests carry `Authorization: tma ...` and succeed.
+4. Turn the flag off: `flyctl secrets unset ALLOW_INSECURE_USER_ID_HEADER -a calorie-track-ai-bot`, then fully close and reopen the Mini App and check that it still loads your data.
 
 ## Contributing
 
