@@ -103,6 +103,9 @@ describe("StatsCharts", () => {
   });
 
   it("uses the Russian decimal separator and unit", async () => {
+    // TelegramProvider (when present) sets the language from the Telegram user
+    const user = window.Telegram!.WebApp.initDataUnsafe.user!;
+    user.language_code = "ru";
     await i18n.changeLanguage("ru");
     try {
       renderWithProviders(
@@ -117,6 +120,7 @@ describe("StatsCharts", () => {
       );
       expect(screen.getByText(/55,56 г \(17,6%\)/)).toBeInTheDocument();
     } finally {
+      user.language_code = "en";
       await i18n.changeLanguage("en");
     }
   });
