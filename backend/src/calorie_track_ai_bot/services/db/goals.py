@@ -1,6 +1,9 @@
 from typing import Any
 
+from psycopg import errors
+
 from .. import database
+from ..config import logger
 from ._base import resolve_user_id
 
 
@@ -28,16 +31,23 @@ async def db_create_or_update_goal(telegram_user_id: str, daily_kcal_target: int
 
     # Atomic upsert; relies on the unique index on goals(user_id)
     async with pool.connection() as conn:
-        cur = await conn.execute(
-            """
-            INSERT INTO goals (user_id, daily_kcal_target) VALUES (%s, %s)
-            ON CONFLICT (user_id) DO UPDATE
-                SET daily_kcal_target = EXCLUDED.daily_kcal_target, updated_at = NOW()
-            RETURNING *
-            """,
-            (user_id, daily_kcal_target),
-        )
+        try:
+            cur = await conn.execute(
+                """
+                INSERT INTO goals (user_id, daily_kcal_target) VALUES (%s, %s)
+                ON CONFLICT (user_id) DO UPDATE
+                    SET daily_kcal_target = EXCLUDED.daily_kcal_target, updated_at = NOW()
+                RETURNING *
+                """,
+                (user_id, daily_kcal_target),
+            )
+        except errors.InvalidColumnReference:
+            logger.error(
+                "Cannot save goals: the database is missing the unique index "
+                "idx_goals_user_id_unique on goals(user_id). Apply it as in backend/infra/schema.sql."
+            )
+            raise
         row = await cur.fetchone()
-        if not row:
-            raise RuntimeError(f"Goal upsert returned no row for user_id: {user_id}")
+        # An upsert with RETURNING always returns the inserted or updated row
+        assert row is not None
         return dict(row)

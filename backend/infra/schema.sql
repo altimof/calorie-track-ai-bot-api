@@ -68,7 +68,7 @@ end $$;
 
 create table if not exists goals (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid references users(id),
+  user_id uuid not null references users(id),
   daily_kcal_target integer not null,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
@@ -130,9 +130,10 @@ create index if not exists idx_estimates_photo_ids on estimates using gin (photo
 create index if not exists idx_meals_user_date on meals(user_id, meal_date);
 create index if not exists idx_meals_user_created on meals(user_id, created_at desc);
 create index if not exists idx_meals_created_at on meals(created_at);
--- one goal per user; replaces the old non-unique idx_goals_user_id
-drop index if exists idx_goals_user_id;
+-- one goal per user; replaces the old non-unique idx_goals_user_id. Create the
+-- unique index before dropping the old one, so a failed create keeps an index.
 create unique index if not exists idx_goals_user_id_unique on goals(user_id);
+drop index if exists idx_goals_user_id;
 create index if not exists idx_feedback_user_id on feedback_submissions(user_id);
 create index if not exists idx_feedback_status on feedback_submissions(status);
 create index if not exists idx_feedback_type on feedback_submissions(message_type);

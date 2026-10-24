@@ -59,10 +59,9 @@ class StatisticsService:
                 )
                 daily_data = [dict(r) for r in await cur.fetchall()]
 
-                # Get user's goal
+                # Get user's goal (one per user, enforced by idx_goals_user_id_unique)
                 cur = await conn.execute(
-                    """SELECT daily_kcal_target FROM goals
-                       WHERE user_id = %s ORDER BY created_at DESC LIMIT 1""",
+                    "SELECT daily_kcal_target FROM goals WHERE user_id = %s",
                     (user_id,),
                 )
                 goal_row = await cur.fetchone()
