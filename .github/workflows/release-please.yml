@@ -1,0 +1,30 @@
+name: release-please
+
+on:
+  push:
+    branches: [main]
+  # Manual re-run. release-please only rebuilds an open release PR when it
+  # decides the content changed; a change to release-please-config.json (new
+  # `extra-files`, say) is not part of that comparison, so the open PR keeps
+  # whatever shape it had when it was first built. Recovery is: delete
+  # `release-please--branches--main` (which closes the stale PR) and run
+  # this, so the PR is built from scratch against the current config.
+  workflow_dispatch:
+
+# The fine-grained PAT (not GITHUB_TOKEN) is deliberate: PRs and releases
+# created with GITHUB_TOKEN don't trigger other workflows, so the release PR
+# would never run CI and the published release would never trigger
+# deploy.yml.
+permissions: {}
+
+jobs:
+  release-please:
+    # Single-CPU runner: API calls only.
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json

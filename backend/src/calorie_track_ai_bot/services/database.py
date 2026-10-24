@@ -34,6 +34,9 @@ async def get_pool() -> AsyncConnectionPool:
                 "keepalives_idle": 10,
                 "keepalives_interval": 5,
                 "keepalives_count": 3,
+                # Keepalives only probe idle sockets; this bounds hangs while a sent
+                # query is still unacknowledged (milliseconds).
+                "tcp_user_timeout": 30000,
             },
             check=AsyncConnectionPool.check_connection,
             max_idle=300,

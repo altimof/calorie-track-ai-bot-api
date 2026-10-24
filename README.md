@@ -1,7 +1,7 @@
 # Calorie Track AI Bot
 
 [![Backend CI](https://github.com/gofrolist/calorie-track-ai-bot-api/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/gofrolist/calorie-track-ai-bot-api/actions/workflows/backend-ci.yml)
-[![Backend Build](https://github.com/gofrolist/calorie-track-ai-bot-api/actions/workflows/backend-build.yml/badge.svg)](https://github.com/gofrolist/calorie-track-ai-bot-api/actions/workflows/backend-build.yml)
+[![Deploy](https://github.com/gofrolist/calorie-track-ai-bot-api/actions/workflows/deploy.yml/badge.svg)](https://github.com/gofrolist/calorie-track-ai-bot-api/actions/workflows/deploy.yml)
 [![Frontend CI](https://github.com/gofrolist/calorie-track-ai-bot-api/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/gofrolist/calorie-track-ai-bot-api/actions/workflows/frontend-ci.yml)
 
 A full-stack application for tracking calories using AI-powered photo analysis with multi-photo support and enhanced meal history features.
@@ -124,18 +124,19 @@ This repository uses optimized GitHub Actions workflows that only run when relev
   - Triggers: Pull requests and pushes to `main` that touch `backend/**` or the workflow file
   - Skips: Frontend-only changes
 
-- **`backend-build.yml`** - Docker image build and push to GHCR
-  - Triggers: After a successful Backend CI run on `main` (`workflow_run`), or on `v*` tags
-
-- **`backend-deploy.yml`** - Deploy to Fly.io
-  - Triggers: After a successful Backend Build run on `main` (`workflow_run`), or on `v*` tags
-  - Only runs when backend is actually built
-
 - **`frontend-ci.yml`** - Frontend CI (Bun: verify generated API client is up to date, Vitest, build)
   - Triggers: Pull requests and pushes to `main` that touch `frontend/**` or the workflow file; manual dispatch
 
-- **`frontend-deploy.yml`** - Deploy to Vercel
-  - Triggers: After a successful Frontend CI run on `main` (`workflow_run`), on `v*` tags, or manual dispatch
+- **`release-please.yml`** - Release PR from Conventional Commits
+  - Triggers: Pushes to `main`; manual dispatch
+  - Merging the release PR bumps the versions, updates `CHANGELOG.md`, and publishes a `vX.Y.Z` release
+
+- **`deploy.yml`** - Production deploy (Fly.io backend, Vercel frontend)
+  - Triggers: A published release; manual dispatch with an existing tag (redeploy or rollback)
+  - Waits for CI to pass on the release commit, then builds and pushes `ghcr.io/<repo>:vX.Y.Z` and deploys it
+
+- **`dependabot-auto-merge.yml`** - Squash-merges Dependabot uv/bun patch and minor bumps after every other workflow on the PR passes
+  - Majors and GitHub Actions bumps wait for review
 
 ### Benefits
 

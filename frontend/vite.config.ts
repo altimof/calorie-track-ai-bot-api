@@ -15,12 +15,20 @@ export default defineConfig({
   },
 
   build: {
-    rollupOptions: {
+    rolldownOptions: {
       output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'chart-vendor': ['recharts'],
-          'i18n-vendor': ['i18next', 'react-i18next'],
+        codeSplitting: {
+          groups: [
+            {
+              name: 'react-vendor',
+              test: /[\\/]node_modules[\\/](react|react-dom|react-router-dom)[\\/]/,
+            },
+            { name: 'chart-vendor', test: /[\\/]node_modules[\\/]recharts[\\/]/ },
+            {
+              name: 'i18n-vendor',
+              test: /[\\/]node_modules[\\/](i18next|react-i18next)[\\/]/,
+            },
+          ],
         },
       },
     },

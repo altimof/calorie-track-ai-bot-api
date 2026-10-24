@@ -60,8 +60,7 @@ export const getCreatePhotoApiV1PhotosPostUrl = () => {
  */
 export const createPhotoApiV1PhotosPost = async (
   photoCreateRequestMultiPhotoCreateRequest:
-    | PhotoCreateRequest
-    | MultiPhotoCreateRequest,
+    PhotoCreateRequest | MultiPhotoCreateRequest,
   options?: Parameters<typeof customFetch>[1],
 ): Promise<createPhotoApiV1PhotosPostResponse> => {
   const getHeaders = (
@@ -144,8 +143,7 @@ export type CreatePhotoApiV1PhotosPostMutationResult = NonNullable<
   Awaited<ReturnType<typeof createPhotoApiV1PhotosPost>>
 >;
 export type CreatePhotoApiV1PhotosPostMutationBody =
-  | PhotoCreateRequest
-  | MultiPhotoCreateRequest;
+  PhotoCreateRequest | MultiPhotoCreateRequest;
 export type CreatePhotoApiV1PhotosPostMutationError = HTTPValidationError;
 export type CreatePhotoApiV1PhotosPostMutationVariables = {
   data: PhotoCreateRequest | MultiPhotoCreateRequest;

@@ -1,0 +1,249 @@
+# .github/workflows/deploy.yml
+#
+# Production deploys happen here and nowhere else: when release-please
+# publishes a release, or by hand for a redeploy or rollback to an existing
+# release. Merging to main runs CI only.
+name: Deploy
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Existing release tag to deploy (e.g. v0.2.0) — redeploy or rollback"
+        required: true
+        type: string
+
+permissions: {}
+
+# Two deploys must not interleave: on the whole workflow. Queued runs start
+# in the order they began waiting, which GitHub does not guarantee matches
+# publish order; if two releases land minutes apart, check that prod ended on
+# the newer one (or redeploy it by hand). queue: max keeps
+# every pending run; by default a newer run cancels the one pending before
+# it, and prod would silently skip that version.
+concurrency:
+  group: deploy-prod
+  queue: max
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+  VERSION: ${{ github.event.release.tag_name || inputs.version }}
+
+jobs:
+  # Nothing is built or deployed until CI has passed on the exact commit that
+  # will be built. Merging the release PR pushes to main, and release-please
+  # publishes the release from that same push, so this workflow starts
+  # seconds after the release commit's CI does. CI on the release PR does not
+  # count: Dependabot merges land on main after it ran, and they merge with
+  # GITHUB_TOKEN, which starts no CI of its own. The release commit's push run
+  # is the first CI that sees them all.
+  #
+  # Both CI workflows are path-filtered. They both run on every release
+  # commit because release-please-config.json bumps a file under backend/
+  # and one under frontend/; keep it that way, or a release would wait here
+  # for a CI that never starts.
+  ci-gate:
+    runs-on: ubuntu-latest
+    # 30 minutes of waiting below plus slack.
+    timeout-minutes: 35
+    permissions:
+      contents: read # the release and its tag
+      checks: read # check runs on the release commit
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      # The version is free text on the dispatch path. It is spliced into API
+      # paths and image tags below, so pin its shape and prove it names a
+      # release that actually exists.
+      - name: Validate version
+        run: |
+          if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::version must look like vX.Y.Z, got '$VERSION'"
+            exit 1
+          fi
+          gh release view "$VERSION" --json tagName --jq .tagName
+
+      # The commit gated here is the commit the deploy jobs check out, by
+      # SHA, so a tag moved after this point cannot swap in unchecked code. On
+      # a release the event names the commit; a tag that no longer points
+      # there was moved after publishing.
+      - name: Resolve the release commit
+        id: commit
+        env:
+          EVENT_SHA: ${{ github.event_name == 'release' && github.sha || '' }}
+        run: |
+          sha="$(gh api "repos/${GH_REPO}/commits/tags/${VERSION}" --jq .sha)"
+          if [ -n "$EVENT_SHA" ] && [ "$EVENT_SHA" != "$sha" ]; then
+            echo "::error::${VERSION} points at ${sha}, but it was published for ${EVENT_SHA}"
+            exit 1
+          fi
+          echo "sha=${sha}" >>"$GITHUB_OUTPUT"
+          echo "${VERSION} is ${sha}"
+
+      # REQUIRED is the CI job names (backend-ci.yml, frontend-ci.yml). The
+      # latest check run per name counts, and a failure fails at once instead
+      # of waiting out the clock. A check that does not exist yet is waited
+      # for only on a release, whose commit was pushed seconds ago; on a
+      # rollback the commit's CI ran long ago, and a missing check never
+      # appears.
+      - name: Wait for CI on the release commit
+        env:
+          SHA: ${{ steps.commit.outputs.sha }}
+          EVENT: ${{ github.event_name }}
+          REQUIRED: '["tests & lint", "Frontend CI"]'
+          WAIT_MINUTES: "30"
+        run: |
+          set -euo pipefail
+          deadline=$(( $(date +%s) + WAIT_MINUTES * 60 ))
+          while :; do
+            runs="$(gh api --paginate "repos/${GH_REPO}/commits/${SHA}/check-runs?filter=latest&per_page=100" \
+                      --jq '.check_runs[] | select(.app.slug == "github-actions") | {name, status, conclusion}' \
+                    | jq -s .)"
+            state="$(jq -c --argjson required "$REQUIRED" '
+              . as $runs
+              | [$required[] as $n | [$runs[] | select(.name == $n)] as $mine
+                 | if ($mine | length) == 0 then {name: $n, state: "missing"}
+                   elif any($mine[]; .status != "completed") then {name: $n, state: "pending"}
+                   elif any($mine[]; .conclusion != "success") then {name: $n, state: "failed"}
+                   else {name: $n, state: "passed"} end]' <<<"$runs")"
+            failed="$(jq -r '[.[] | select(.state == "failed") | .name] | join(", ")' <<<"$state")"
+            missing="$(jq -r '[.[] | select(.state == "missing") | .name] | join(", ")' <<<"$state")"
+            pending="$(jq -r '[.[] | select(.state != "passed") | "\(.name) (\(.state))"] | join(", ")' <<<"$state")"
+            if [ -n "$failed" ]; then
+              echo "::error::CI did not pass on ${SHA}: ${failed}. Re-run the failed CI jobs on that commit, then re-run this workflow"
+              exit 1
+            fi
+            if [ -n "$missing" ] && [ "$EVENT" != release ]; then
+              echo "::error::CI never ran on ${SHA} for: ${missing}, and an old commit gets no new CI"
+              exit 1
+            fi
+            [ -z "$pending" ] && break
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "::error::CI on ${SHA} did not finish within ${WAIT_MINUTES} minutes; still waiting on: ${pending}"
+              exit 1
+            fi
+            echo "waiting on: ${pending}"
+            sleep 30
+          done
+          echo "CI passed on ${SHA}"
+
+  backend-image:
+    needs: ci-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write # push to GHCR
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.ci-gate.outputs.sha }}
+          persist-credentials: false
+
+      - name: Login to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      # A redeploy or rollback ships the image the release already pushed, not
+      # a rebuild: the Dockerfile's uv:0.8 and apk packages float, so a rebuild
+      # would differ and overwrite the release's tag. Built only when missing.
+      - name: Look for the release image
+        id: existing
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if docker buildx imagetools inspect "${IMAGE}:${VERSION}" >/dev/null 2>&1; then
+            echo "found=true" >>"$GITHUB_OUTPUT"
+            echo "${IMAGE}:${VERSION} exists; deploying it as is"
+          fi
+
+      # Tagged with the version so a rollback deploys the image that release
+      # shipped; :latest follows the newest deploy for anyone pulling by hand.
+      - name: Build & push image
+        if: steps.existing.outputs.found != 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ env.VERSION }}
+            ${{ env.IMAGE }}:latest
+          cache-from: type=registry,ref=${{ env.IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.IMAGE }}:buildcache,mode=max
+
+      - name: Point :latest at the release image
+        if: steps.existing.outputs.found == 'true'
+        run: docker buildx imagetools create --tag "${IMAGE}:latest" "${IMAGE}:${VERSION}"
+
+  backend-deploy:
+    needs: [ci-gate, backend-image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.ci-gate.outputs.sha }}
+          persist-credentials: false
+
+      - name: Install Flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@v1
+
+      - name: Deploy to Fly
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy --image "${IMAGE}:${VERSION}"
+
+  # After the backend: a frontend that calls endpoints the backend failed to
+  # ship would break in production.
+  frontend-deploy:
+    needs: [ci-gate, backend-deploy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.ci-gate.outputs.sha }}
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        run: bun run build
+
+      - name: Install Vercel CLI
+        run: bun install --global vercel@latest
+
+      - name: Deploy to Vercel
+        working-directory: .
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          vercel --prod --token "$VERCEL_TOKEN"

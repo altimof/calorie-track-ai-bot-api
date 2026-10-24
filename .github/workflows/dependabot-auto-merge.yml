@@ -1,0 +1,238 @@
+# .github/workflows/dependabot-auto-merge.yml
+#
+# Land the Dependabot PRs that are safe without a human: patch and minor
+# bumps of uv (backend) and bun (frontend) packages, once every other
+# workflow on the PR has passed. Two classes stay open for review on purpose:
+#   - semver-major bumps of anything — breaking changes by definition
+#   - every github-actions bump — a new action version is new code that runs
+#     in CI with this repo's tokens (FLY_API_TOKEN, VERCEL_TOKEN), so a human
+#     should look at it before it is trusted
+# Anything this job cannot classify (no metadata, an unknown ecosystem, a
+# commit Dependabot did not make) is held too. Held means the job stays
+# green and says why in its summary; the PR waits for a human.
+#
+# No third-party action runs here. The workflow triggers on `pull_request`,
+# so each Dependabot PR runs its own copy of this file, including a
+# github-actions bump of an action this file uses: skipping the merge step
+# never stopped the bumped action from running before it, with the job's
+# token; with dependabot/fetch-metadata that would be a third-party action
+# holding contents: write on an unprotected main. The update is classified
+# with gh, jq and yq from the event payload and the commit GitHub signed, and
+# the write token lives only in `merge`, which runs one `gh pr merge` pinned to
+# the head commit that `gate` checked.
+#
+# `gate` does the waiting itself: every other workflow run on the PR's head
+# commit must finish and succeed (or be skipped) before the merge. On an
+# unprotected main `gh pr merge --auto` merges on the spot, before CI has
+# finished, and waiting on every workflow is stricter than any set of
+# required checks, so this also serves once main is protected.
+#
+# A merge made with GITHUB_TOKEN starts no workflow on main, so nothing
+# deploys here: the next release ships it, after deploy.yml has waited for CI
+# on the release commit.
+name: Dependabot auto-merge
+
+on: pull_request
+
+permissions: {}
+
+# A newer push to the PR (a Dependabot rebase, or anyone else's commit)
+# starts a run of its own; the stale one must not keep waiting on the old
+# commit's results.
+concurrency:
+  group: dependabot-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    # Bounded wait for the other workflows; a hung one must not hold the
+    # runner for six hours.
+    timeout-minutes: 45
+    permissions:
+      actions: read # the other workflow runs on the head commit
+      contents: read
+      pull-requests: read # the PR's commits
+    outputs:
+      merge: ${{ steps.checks.outputs.merge }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      HEAD_REF: ${{ github.event.pull_request.head.ref }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Classify the update
+        id: classify
+        run: |
+          set -euo pipefail
+          hold() {
+            echo "::notice title=Held for review::$*"
+            echo "Held for review: $*" >>"$GITHUB_STEP_SUMMARY"
+            echo "eligible=false" >>"$GITHUB_OUTPUT"
+            exit 0
+          }
+
+          # The ecosystem, from the branch Dependabot named:
+          # dependabot/<ecosystem>/<directory>/<dependency>-<version>, in the
+          # branch-name spelling (github_actions, docker_compose). An
+          # allowlist, so an ecosystem added later is held until someone
+          # decides otherwise.
+          [[ "$HEAD_REF" == dependabot/*/* ]] || hold "branch ${HEAD_REF} is not a Dependabot branch"
+          ecosystem="$(cut -d/ -f2 <<<"$HEAD_REF")"
+          case "$ecosystem" in
+            uv | bun) ;;
+            *) hold "${ecosystem} bumps are reviewed by a human" ;;
+          esac
+
+          # Every commit on the PR is Dependabot's and GitHub-signed, and the
+          # last one is the head this run was started for.
+          commits="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/commits?per_page=100")"
+          foreign="$(jq -r '[.[] | select(.author.login != "dependabot[bot]"
+                                         or .commit.verification.verified != true) | .sha] | join(" ")' <<<"$commits")"
+          [ -z "$foreign" ] || hold "commits not made by Dependabot: ${foreign}"
+          [ "$(jq -r '.[-1].sha' <<<"$commits")" = "$HEAD_SHA" ] \
+            || hold "the PR head moved past ${HEAD_SHA}; the run for the new head decides"
+
+          # What moved, and how far: the `updated-dependencies` block
+          # Dependabot writes between a `---` and a `...` line of its commit
+          # message (the same block fetch-metadata parsed). Every dependency
+          # in it must be a patch or minor bump.
+          command -v yq >/dev/null || { echo "::error::yq is missing from the runner image"; exit 1; }
+          message="$(jq -r '.[-1].commit.message' <<<"$commits")"
+          block="$(awk '/^---$/ { buf = ""; on = 1; next } /^\.\.\.$/ && on { printf "%s", buf; exit } on { buf = buf $0 "\n" }' <<<"$message")"
+          # Versions are unquoted YAML: keep `4.10` the string it was written
+          # as, not the float 4.1, so it can be matched against the prose below.
+          deps="$(yq -o=json '(.["updated-dependencies"] // [])
+                  | (.[] | select(has("dependency-version")) | .["dependency-version"]) tag = "!!str"' \
+                  <<<"$block" 2>/dev/null)" \
+            || hold "the metadata block in ${HEAD_SHA} does not parse"
+          jq -e 'type == "array" and length > 0' <<<"$deps" >/dev/null \
+            || hold "no updated-dependencies metadata in ${HEAD_SHA}"
+
+          # Dependabot leaves update-type out for an indirect dependency, which
+          # is what a security update of a transitive package is (urllib3 in
+          # backend/uv.lock, say), so those would all be held. The same signed
+          # message says how far it moved in prose: "Bumps
+          # [name](url) from A to B." or, in a group, "Updates `name` from A
+          # to B". Derive the update-type from that line, by Dependabot's own
+          # rule (first differing release segment, 0.x included). Only plain
+          # release versions count, and the line's B must be the metadata's
+          # dependency-version, so a pre-release or a line that is missing
+          # still holds.
+          deps="$(jq --arg message "$message" '
+            def release: if test("^v?[0-9]+(\\.[0-9]+){0,2}$")
+              then ltrimstr("v") | split(".") | map(tonumber) | (. + [0, 0])[:3] else null end;
+            def kind($from; $to): ($from | release) as $a | ($to | release) as $b
+              | if $a == null or $b == null or $b <= $a then null
+                elif $a[0] != $b[0] then "semver-major"
+                elif $a[1] != $b[1] then "semver-minor"
+                else "semver-patch" end;
+            [$message | split("\n")[]
+              | capture("^Bumps \\[(?<name>[^\\]]+)\\]\\([^)]*\\) from (?<from>\\S+) to (?<to>\\S+?)\\.?$")
+                // capture("^Bumps (?<name>[^\\s\\[]+) from (?<from>\\S+) to (?<to>\\S+?)\\.?$")
+                // capture("^Updates `(?<name>[^`]+)` from (?<from>\\S+) to (?<to>\\S+?)$")
+            ] as $moves
+            | map(if .["update-type"] then . else
+                (.["dependency-name"] | ascii_downcase) as $name | .["dependency-version"] as $version
+                | [$moves[] | select((.name | ascii_downcase) == $name and .to == $version)
+                   | kind(.from; .to)] as $kinds
+                | if $kinds == [] or any($kinds[]; . == null) then .
+                  else . + {"update-type": ("version-update:" + (
+                    if any($kinds[]; . == "semver-major") then "semver-major"
+                    elif any($kinds[]; . == "semver-minor") then "semver-minor"
+                    else "semver-patch" end)), "derived": true} end
+              end)' <<<"$deps")"
+          jq -r '.[] | "\(.["dependency-name"]): \(.["update-type"] // "no update-type")\(if .derived then " (from the commit message)" else "" end)"' <<<"$deps"
+          wide="$(jq -r '[.[] | select(.["update-type"] != "version-update:semver-patch"
+                                      and .["update-type"] != "version-update:semver-minor")
+                          | .["dependency-name"]] | join(" ")' <<<"$deps")"
+          [ -z "$wide" ] || hold "not a patch or minor bump: ${wide}"
+
+          # Distinct names: a group can list one package more than once.
+          echo "count=$(jq '[.[] | .["dependency-name"]] | unique | length' <<<"$deps")" >>"$GITHUB_OUTPUT"
+          echo "eligible=true" >>"$GITHUB_OUTPUT"
+
+      - name: Wait for the other workflows on the head commit
+        id: checks
+        if: steps.classify.outputs.eligible == 'true'
+        env:
+          DEP_COUNT: ${{ steps.classify.outputs.count }}
+        run: |
+          set -euo pipefail
+          echo "gating on the other workflows for ${HEAD_SHA}"
+          # Latest run of every other workflow on this exact commit. A
+          # re-run supersedes the run it replaces, so group by workflow and
+          # keep the highest run_number.
+          runs() {
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&per_page=100" \
+              --jq "[.workflow_runs[] | select(.name != \"${GITHUB_WORKFLOW}\")]
+                    | group_by(.name) | map(max_by(.run_number))
+                    | map({name, status, conclusion})"
+          }
+          # The runs API sometimes answers with fewer runs than it listed a
+          # poll earlier, or none at all, and a call can fail outright. A snapshot like that is
+          # retried, never trusted: an empty one would fail the gate, and one
+          # missing a workflow that was still running could let the rest
+          # finish and merge without it. Workflows never vanish from a commit,
+          # so `seen` only grows. Five misses in a row still hold.
+          seen='[]'
+          misses=0
+          while :; do
+            snapshot="$(runs)" || snapshot='[]'
+            seen="$(jq -c --argjson seen "$seen" '$seen + map(.name) | unique' <<<"$snapshot")"
+            missing="$(jq -r --argjson seen "$seen" '$seen - map(.name) | join(", ")' <<<"$snapshot")"
+            total="$(jq length <<<"$snapshot")"
+            pending="$(jq '[.[] | select(.status != "completed")] | length' <<<"$snapshot")"
+            if [ "$total" -eq 0 ] || [ -n "$missing" ]; then
+              misses=$((misses + 1))
+              if [ "$misses" -ge 5 ]; then
+                if [ "$seen" = '[]' ]; then
+                  echo "no other workflow ran on ${HEAD_SHA}; refusing to merge unchecked"
+                else
+                  echo "the runs API keeps leaving out ${missing}; refusing to merge unchecked"
+                fi
+                exit 1
+              fi
+              echo "the runs API listed ${total} workflow(s)${missing:+, not ${missing}}; asking again…"
+              sleep 30
+              continue
+            fi
+            misses=0
+            [ "$pending" -eq 0 ] && break
+            echo "waiting on ${pending}/${total} workflow(s)…"
+            sleep 30
+          done
+          jq -r '.[] | "\(.name): \(.conclusion)"' <<<"$snapshot"
+          failed="$(jq -r '.[] | select(.conclusion != "success" and .conclusion != "skipped") | .name' <<<"$snapshot")"
+          if [ -n "$failed" ]; then
+            echo "not merging; unsuccessful: ${failed}"
+            # A group PR is one PR for many packages: find the one that broke
+            # and drop it rather than holding the rest behind it.
+            if [ "$DEP_COUNT" -gt 1 ]; then
+              echo "Multi-package update held by failing checks. If one package broke them (not a flake), add a versioned \`ignore\` for it in .github/dependabot.yml; the next run regroups the rest. Avoid \`@dependabot ignore <dependency>\`: it ignores every future version, security updates included." >>"$GITHUB_STEP_SUMMARY"
+            fi
+            exit 1
+          fi
+          echo "merge=true" >>"$GITHUB_OUTPUT"
+
+  # The only job with a write token, and it runs nothing but gh. The merge is
+  # pinned to the commit `gate` checked: if the head moved since, GitHub
+  # refuses it rather than merging commits whose checks nobody waited for.
+  merge:
+    needs: gate
+    if: needs.gate.outputs.merge == 'true'
+    # Single-CPU runner: one gh call. `gate` stays on ubuntu-latest: its wait
+    # can outlast ubuntu-slim's hard 15-minute job limit.
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    permissions:
+      contents: write # the merge writes to main
+      pull-requests: write
+    steps:
+      - name: Merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: gh pr merge --squash --match-head-commit "$HEAD_SHA" "$PR_URL"

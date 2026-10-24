@@ -226,9 +226,4 @@ frontend/tsconfig.tsbuildinfo
 frontend/*.tsbuildinfo
 .vercel
 
-# speckit
-.codex
-.cursor
-.specify
-/specs
 docs/plans/

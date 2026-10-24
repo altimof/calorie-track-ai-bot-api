@@ -87,8 +87,7 @@ export const getCreateMealApiV1MealsPostUrl = () => {
  */
 export const createMealApiV1MealsPost = async (
   mealCreateManualRequestMealCreateFromEstimateRequest:
-    | MealCreateManualRequest
-    | MealCreateFromEstimateRequest,
+    MealCreateManualRequest | MealCreateFromEstimateRequest,
   options?: Parameters<typeof customFetch>[1],
 ): Promise<createMealApiV1MealsPostResponse> => {
   const getHeaders = (
@@ -173,8 +172,7 @@ export type CreateMealApiV1MealsPostMutationResult = NonNullable<
   Awaited<ReturnType<typeof createMealApiV1MealsPost>>
 >;
 export type CreateMealApiV1MealsPostMutationBody =
-  | MealCreateManualRequest
-  | MealCreateFromEstimateRequest;
+  MealCreateManualRequest | MealCreateFromEstimateRequest;
 export type CreateMealApiV1MealsPostMutationError = HTTPValidationError;
 export type CreateMealApiV1MealsPostMutationVariables = {
   data: MealCreateManualRequest | MealCreateFromEstimateRequest;
@@ -228,8 +226,7 @@ export type getMealsApiV1MealsGetResponseError =
   };
 
 export type getMealsApiV1MealsGetResponse =
-  | getMealsApiV1MealsGetResponseSuccess
-  | getMealsApiV1MealsGetResponseError;
+  getMealsApiV1MealsGetResponseSuccess | getMealsApiV1MealsGetResponseError;
 
 export const getGetMealsApiV1MealsGetUrl = (
   params?: GetMealsApiV1MealsGetParams,

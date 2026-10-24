@@ -8,13 +8,19 @@ These are the secrets referenced by the workflows in `.github/workflows/`. Add t
 
 ### Go to: Settings → Secrets and variables → Actions → Repository secrets
 
-## Backend Deployment (`backend-deploy.yml`)
+## Releases (`release-please.yml`)
+
+| Secret Name | Description | Example |
+|-------------|-------------|---------|
+| `RELEASE_PLEASE_TOKEN` | Fine-grained PAT for this repository with **Contents**, **Issues** and **Pull requests** read/write (Issues: release-please labels the release PR). Not `GITHUB_TOKEN`: PRs and releases created with it trigger no workflows, so the release PR would get no CI and the release would never deploy | `github_pat_...` |
+
+## Backend Deployment (`deploy.yml`)
 
 | Secret Name | Description | Example |
 |-------------|-------------|---------|
 | `FLY_API_TOKEN` | Fly.io API token for deployment | `your-fly-api-token` |
 
-## Frontend Deployment (`frontend-deploy.yml`)
+## Frontend Deployment (`deploy.yml`)
 
 | Secret Name | Description | Example |
 |-------------|-------------|---------|
@@ -28,7 +34,7 @@ These are the secrets referenced by the workflows in `.github/workflows/`. Add t
 |-------------|-------------|---------|
 | `OPENAI_API_KEY` | Passed to the pytest step. Optional: tests mock OpenAI and `tests/conftest.py` overrides this variable with a test value | `sk-proj-...` |
 
-`GITHUB_TOKEN` (used by `backend-build.yml` to push the image to GHCR) is provided automatically by GitHub Actions.
+`GITHUB_TOKEN` (used by `deploy.yml` to push the image to GHCR, and by `dependabot-auto-merge.yml` to merge) is provided automatically by GitHub Actions.
 
 ## Runtime Configuration (not GitHub secrets)
 
@@ -62,15 +68,14 @@ nano backend/.env
 - Ruff lint, ruff format check, pyright, and the full pytest suite
 - External services are mocked; no real service credentials required
 
-### Backend Build and Deploy (Main Branch / Tags)
-- `backend-build.yml` runs after a successful Backend CI run on `main` (or on `v*` tags) and pushes `ghcr.io/<owner>/<repo>:latest`
-- `backend-deploy.yml` runs after a successful Backend Build on `main` (or on `v*` tags) and deploys that image to Fly.io
-- Requires `FLY_API_TOKEN` secret
-
-### Frontend CI and Deploy
+### Frontend CI
 - `frontend-ci.yml` runs on pull requests and pushes to `main` that touch `frontend/**`, plus manual dispatch
-- `frontend-deploy.yml` runs after a successful Frontend CI run on `main`, on `v*` tags, or manual dispatch, and deploys to Vercel
-- Requires `VERCEL_TOKEN`, `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` secrets
+
+### Releases and Deploys
+- Pushes to `main` do not deploy. `release-please.yml` keeps a release PR open; merging it publishes a `vX.Y.Z` release (requires `RELEASE_PLEASE_TOKEN`)
+- `deploy.yml` runs on that release, waits for Backend CI and Frontend CI to pass on the release commit, pushes `ghcr.io/<owner>/<repo>:vX.Y.Z` (and `:latest`), deploys it to Fly.io, and deploys the frontend to Vercel
+- To redeploy or roll back, run `deploy.yml` manually with an existing release tag
+- Requires `FLY_API_TOKEN`, `VERCEL_TOKEN`, `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` secrets
 
 ## Security Notes
 

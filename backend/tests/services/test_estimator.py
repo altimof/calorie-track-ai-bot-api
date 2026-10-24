@@ -5,29 +5,30 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from calorie_track_ai_bot.services.estimator import SCHEMA, estimate_from_image_url
+from calorie_track_ai_bot.services.estimator import SCHEMA_WITH_MACROS, estimate_from_image_url
 
 
 class TestEstimator:
     """Test estimator functions."""
 
     def test_schema_structure(self):
-        """Test that SCHEMA has the correct structure."""
-        assert "type" in SCHEMA
-        assert SCHEMA["type"] == "object"
-        assert "properties" in SCHEMA
-        assert "required" in SCHEMA
+        """Test that SCHEMA_WITH_MACROS has the correct structure."""
+        assert "type" in SCHEMA_WITH_MACROS
+        assert SCHEMA_WITH_MACROS["type"] == "object"
+        assert "properties" in SCHEMA_WITH_MACROS
+        assert "required" in SCHEMA_WITH_MACROS
 
         # Check required fields
-        required_fields = SCHEMA["required"]
+        required_fields = SCHEMA_WITH_MACROS["required"]
         assert "kcal_mean" in required_fields
         assert "kcal_min" in required_fields
         assert "kcal_max" in required_fields
         assert "confidence" in required_fields
+        assert "macronutrients" in required_fields
         assert "items" in required_fields
 
         # Check properties structure
-        properties = SCHEMA["properties"]
+        properties = SCHEMA_WITH_MACROS["properties"]
         assert "kcal_mean" in properties
         assert "kcal_min" in properties
         assert "kcal_max" in properties
@@ -50,6 +51,7 @@ class TestEstimator:
             "kcal_min": 400,
             "kcal_max": 600,
             "confidence": 0.8,
+            "macronutrients": {"protein": 20, "carbs": 60, "fats": 18},
             "items": [{"label": "pizza", "kcal": 500, "confidence": 0.8}],
         }
 
@@ -86,7 +88,8 @@ class TestEstimator:
             # Check response format
             response_format = call_args.kwargs["response_format"]
             assert response_format["type"] == "json_schema"
-            assert "json_schema" in response_format
+            assert response_format["json_schema"]["schema"] is SCHEMA_WITH_MACROS
+            assert response_format["json_schema"]["strict"] is True
 
     @pytest.mark.asyncio
     async def test_estimate_from_image_url_no_content(self):

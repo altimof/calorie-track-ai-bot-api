@@ -1,14 +1,76 @@
+# Minor and patch bumps are grouped: one PR per ecosystem per week instead of
+# one per package. Majors stay one PR per package on purpose:
+# dependabot-auto-merge.yml holds them for a human, and a group would hide
+# which package broke. The auto-merge gate checks every dependency in a
+# group's metadata, so a group never merges past its rules; the flip side is
+# that one member the gate would hold, or one that breaks the tests, holds the
+# whole group. For a member that breaks the tests, add an `ignore` entry with
+# the broken `versions` and the reason, and the next run regroups the rest.
+# Not `@dependabot ignore <dependency>` on the PR: that stores an ignore for
+# every future version, security updates included, somewhere no one reading
+# this repo will see it.
+#
+# commit-message pins the `chore(deps): …` / `chore(deps-dev): …` titles, so
+# release-please leaves dependency bumps out of the changelog and they never
+# cut a release on their own.
+#
+# Every ecosystem has a `cooldown`: a release must be public for a week (a
+# bun or uv patch for three days) before Dependabot proposes it. Patch and
+# minor bumps merge without review, so without a wait a hijacked maintainer
+# account publishing a patch that keeps the tests green would land within
+# minutes; takeovers are usually found and yanked within hours to a day or
+# two. Cooldown holds version updates only; security updates are never
+# delayed.
 version: 2
 updates:
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: github-actions
+    directory: /
     schedule:
-      interval: "weekly"
-  - package-ecosystem: "uv"
-    directory: "/backend"
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      actions:
+        update-types: [minor, patch]
+
+  - package-ecosystem: uv
+    directory: /backend
     schedule:
-      interval: "weekly"
-  - package-ecosystem: "bun"
-    directory: "/frontend"
+      interval: weekly
+    cooldown:
+      default-days: 7
+      semver-patch-days: 3
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      uv:
+        update-types: [minor, patch]
+
+  - package-ecosystem: bun
+    directory: /frontend
     schedule:
-      interval: "weekly"
+      interval: weekly
+    cooldown:
+      default-days: 7
+      semver-patch-days: 3
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      # react-dom refuses to load beside a react of any other version
+      # ("Incompatible React versions"), so a bump of one without the other
+      # cannot pass. A dependency joins the first group that matches it, so
+      # this group comes first and keeps react, majors included, in one PR.
+      react:
+        patterns:
+          - react
+          - react-dom
+          - "@types/react"
+          - "@types/react-dom"
+      # Everything else.
+      bun:
+        update-types: [minor, patch]

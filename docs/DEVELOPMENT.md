@@ -97,13 +97,14 @@ VITE_DEV_USER_ID=123456789
 
 ### 3. Set Up the Database Schema
 
-A fresh Neon (or any Postgres) database starts empty — there is no migration tool, so the schema must be applied manually before first use:
+A fresh Neon (or any Postgres) database starts empty — there is no migration tool, so the schema must be applied manually before first use. This needs `psql` (or paste the file into the Neon console SQL editor instead). `psql` does not read `backend/.env`, so export the same `DATABASE_URL` in your shell first:
 
 ```bash
-psql "$DATABASE_URL" -f backend/infra/schema.sql
+export DATABASE_URL='postgresql://user:pass@ep-xxx.us-east-2.aws.neon.tech/neondb?sslmode=require'
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/infra/schema.sql
 ```
 
-Skipping this step leaves tables like `users` and `photos` missing, which surfaces as `psycopg.errors.UndefinedTable: relation "users" does not exist` the first time the bot processes a message. See `backend/infra/schema.sql` and [database-schema-changes.md](database-schema-changes.md) for details, and re-run it after pulling schema changes.
+Skipping this step leaves tables like `users` and `photos` missing, which surfaces as `psycopg.errors.UndefinedTable: relation "users" does not exist` the first time the bot processes a message. `schema.sql` is only safe on an empty database or one already at the current schema — it does not upgrade an older database, so after pulling schema changes apply them by hand as described in [database-schema-changes.md](database-schema-changes.md).
 
 ### 4. Start Development Servers
 
@@ -300,11 +301,11 @@ If you have port conflicts:
 
 ## Production Deployment
 
-Deployments normally happen automatically from GitHub Actions on push to `main` (`backend-ci.yml` -> `backend-build.yml` -> `backend-deploy.yml`, and `frontend-ci.yml` -> `frontend-deploy.yml`). Manual deploys:
+Deployments normally happen from GitHub Actions when the release-please PR is merged: the published `vX.Y.Z` release runs `deploy.yml`, which waits for CI on the release commit and deploys both apps. Run `deploy.yml` manually with an existing tag to redeploy or roll back. Manual deploys:
 
-> **New Neon project?** Apply the schema before the first deploy — it is not run automatically: `psql "$DATABASE_URL" -f backend/infra/schema.sql`. Without it, the deployed backend starts and passes health checks, but any message the bot processes fails with `relation "users" does not exist`.
+> **New Neon project?** Apply the schema before the first release is deployed — no workflow runs it: `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/infra/schema.sql` (see [step 3](#3-set-up-the-database-schema)). Without it, the deployed backend starts and passes health checks, but any message the bot processes fails with `relation "users" does not exist`.
 
-> **Deploying your own fork?** Set the `CORS_ORIGINS` secret on your backend to your frontend's actual URL (e.g. `fly secrets set CORS_ORIGINS=https://your-frontend.vercel.app,https://t.me`). With `APP_ENV=production` and no `CORS_ORIGINS` set, the backend defaults to allowing only this repo's own Vercel domain — your Mini App will load, but every API call is silently blocked by CORS, so pages like meals/goals/statistics appear empty with nothing obviously wrong in the backend logs. See `get_cors_origins()` in `backend/src/calorie_track_ai_bot/services/config.py`.
+> **Deploying your own fork?** Set the `CORS_ORIGINS` secret on your backend to your frontend's actual URL (e.g. `fly secrets set CORS_ORIGINS=https://your-frontend.vercel.app,https://t.me`). Without it the backend falls back to built-in origins that cannot match your frontend: with `APP_ENV=production`, this repo's own Vercel domain plus `https://t.me`; otherwise (`APP_ENV` defaults to `dev`, and `backend/fly.toml` does not set it) only localhost origins. Your Mini App will load, but every API call is blocked by CORS, so pages like meals/goals/statistics appear empty. The effective list is logged once at startup as `Configuring CORS with origins: [...]`; see `get_cors_origins()` in `backend/src/calorie_track_ai_bot/services/config.py`. Also change `app` and `WEBHOOK_URL` in `backend/fly.toml` (they point at this repo's `calorie-track-ai-bot.fly.dev`), and with `APP_ENV=production` on a custom domain add it to `TRUSTED_HOSTS` (the default only allows `*.fly.dev` and localhost).
 
 ### Backend (Fly.io)
 ```bash

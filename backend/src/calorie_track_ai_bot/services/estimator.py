@@ -3,8 +3,9 @@ import os
 from typing import Any
 
 from openai import AsyncOpenAI
+from openai.types.shared_params import ResponseFormatJSONSchema
 
-from .config import APP_ENV, OPENAI_API_KEY, OPENAI_MODEL
+from .config import APP_ENV, OPENAI_API_KEY, OPENAI_MODEL, logger
 
 # Initialize OpenAI client only if configuration is available
 client: AsyncOpenAI | None = None
@@ -21,20 +22,23 @@ elif APP_ENV == "dev":
 else:
     raise ValueError("OPENAI_API_KEY must be set")
 
-# Extended schema for multi-photo with macronutrients (Feature: 003-update-logic-for)
+# Structured-output schema shared by single-photo and multi-photo estimation
 SCHEMA_WITH_MACROS = {
     "type": "object",
     "properties": {
-        "kcal_mean": {"type": "number"},
-        "kcal_min": {"type": "number"},
-        "kcal_max": {"type": "number"},
-        "confidence": {"type": "number"},
+        "kcal_mean": {"type": "number", "description": "Best estimate for the whole meal, kcal"},
+        "kcal_min": {"type": "number", "description": "Low end of the plausible range, kcal"},
+        "kcal_max": {"type": "number", "description": "High end of the plausible range, kcal"},
+        "confidence": {
+            "type": "number",
+            "description": "Confidence in the estimate, from 0 to 1 (shown to users as a percent)",
+        },
         "macronutrients": {
             "type": "object",
             "properties": {
-                "protein": {"type": "number"},
-                "carbs": {"type": "number"},
-                "fats": {"type": "number"},
+                "protein": {"type": "number", "description": "Grams for the whole meal"},
+                "carbs": {"type": "number", "description": "Grams for the whole meal"},
+                "fats": {"type": "number", "description": "Grams for the whole meal"},
             },
             "required": ["protein", "carbs", "fats"],
             "additionalProperties": False,
@@ -44,9 +48,9 @@ SCHEMA_WITH_MACROS = {
             "items": {
                 "type": "object",
                 "properties": {
-                    "label": {"type": "string"},
-                    "kcal": {"type": "number"},
-                    "confidence": {"type": "number"},
+                    "label": {"type": "string", "description": "Short name of the food item"},
+                    "kcal": {"type": "number", "description": "Estimated kcal for this item"},
+                    "confidence": {"type": "number", "description": "From 0 to 1"},
                 },
                 "required": ["label", "kcal", "confidence"],
                 "additionalProperties": False,
@@ -57,14 +61,19 @@ SCHEMA_WITH_MACROS = {
     "additionalProperties": False,
 }
 
-# Base schema without macronutrients (derived from SCHEMA_WITH_MACROS)
-SCHEMA = {
-    **SCHEMA_WITH_MACROS,
-    "properties": {
-        k: v for k, v in SCHEMA_WITH_MACROS["properties"].items() if k != "macronutrients"
+RESPONSE_FORMAT: ResponseFormatJSONSchema = {
+    "type": "json_schema",
+    "json_schema": {
+        "name": "EstimateWithMacros",
+        "schema": SCHEMA_WITH_MACROS,
+        "strict": True,
     },
-    "required": [r for r in SCHEMA_WITH_MACROS["required"] if r != "macronutrients"],
 }
+
+ESTIMATE_INSTRUCTIONS = (
+    "Estimate total calories (min, max, mean) and macronutrients "
+    "(protein, carbs, fats in grams). Return structured JSON."
+)
 
 
 async def estimate_from_image_url(image_url: str) -> dict[str, Any]:
@@ -95,16 +104,14 @@ async def estimate_from_image_url(image_url: str) -> dict[str, Any]:
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": "Estimate meal calories. Return structured JSON."},
+                    {"type": "text", "text": ESTIMATE_INSTRUCTIONS},
                     {"type": "image_url", "image_url": {"url": image_url}},
                 ],
             }
         ],
-        response_format={
-            "type": "json_schema",
-            "json_schema": {"name": "Estimate", "schema": SCHEMA, "strict": True},
-        },
+        response_format=RESPONSE_FORMAT,
     )
+    logger.info("OpenAI usage (single photo): %s", resp.usage)
     content = resp.choices[0].message.content
     if content is None:
         raise ValueError("No content returned from OpenAI")
@@ -177,10 +184,7 @@ class CalorieEstimator:
         if description:
             prompt_text += f"Description: {description}. "
 
-        prompt_text += (
-            "Estimate total calories (min, max, mean) and macronutrients "
-            "(protein, carbs, fats in grams). Return structured JSON."
-        )
+        prompt_text += ESTIMATE_INSTRUCTIONS
 
         # Build content with all photos
         content: list[dict[str, Any]] = [{"type": "text", "text": prompt_text}]
@@ -191,16 +195,10 @@ class CalorieEstimator:
         resp = await self.client.chat.completions.create(
             model=OPENAI_MODEL,
             messages=[{"role": "user", "content": content}],  # type: ignore
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "EstimateWithMacros",
-                    "schema": SCHEMA_WITH_MACROS,
-                    "strict": True,
-                },
-            },
+            response_format=RESPONSE_FORMAT,
         )
 
+        logger.info("OpenAI usage (%d photos): %s", len(valid_urls), resp.usage)
         content_str = resp.choices[0].message.content
         if content_str is None:
             raise ValueError("No content returned from OpenAI")

@@ -35,7 +35,7 @@ The `Suspense` boundary (spinner fallback) lives in `src/components/layout/AppLa
 
 ### 3. Bundle Optimization
 - Tree shaking and minification (Vite production build)
-- Vendor chunk splitting via `manualChunks` in `vite.config.ts`: `react-vendor`, `chart-vendor` (Recharts), `i18n-vendor`
+- Vendor chunk splitting via `codeSplitting.groups` in `vite.config.ts`: `react-vendor`, `chart-vendor` (Recharts), `i18n-vendor`
 - `chunkSizeWarningLimit: 600` (KB)
 
 ### 4. Caching Strategy

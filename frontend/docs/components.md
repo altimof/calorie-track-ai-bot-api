@@ -192,4 +192,4 @@ Playwright specs in `tests/e2e/` cover user workflows, e.g.:
 
 ### Bundle Optimization
 - Route-level code splitting with `React.lazy()`
-- Vendor chunks (`react-vendor`, `chart-vendor`, `i18n-vendor`) via `manualChunks` in `vite.config.ts`
+- Vendor chunks (`react-vendor`, `chart-vendor`, `i18n-vendor`) via `codeSplitting.groups` in `vite.config.ts`

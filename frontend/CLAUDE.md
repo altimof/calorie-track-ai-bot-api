@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-React 19 + TypeScript 5.9 + Vite 7 frontend for a Telegram Mini App that does AI-powered food photo analysis and calorie tracking. Uses Bun as the package manager and runtime. Deployed on Vercel. The backend is a separate FastAPI service in `../backend/`.
+React 19 + TypeScript 5.9 + Vite 8 frontend for a Telegram Mini App that does AI-powered food photo analysis and calorie tracking. Uses Bun as the package manager and runtime. Deployed on Vercel. The backend is a separate FastAPI service in `../backend/`.
 
 ## Commands
 

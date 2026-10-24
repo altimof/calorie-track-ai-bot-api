@@ -1,6 +1,6 @@
 # Calorie Track AI - Telegram Mini App
 
-A modern, mobile-first Telegram Mini App for calorie tracking with AI-powered food recognition. Built with React 19, TypeScript 5.9, Vite 7, Tailwind CSS v4, and TanStack Query (with an Orval-generated API client), featuring meal tracking, goal setting, and statistics.
+A modern, mobile-first Telegram Mini App for calorie tracking with AI-powered food recognition. Built with React 19, TypeScript 5.9, Vite 8, Tailwind CSS v4, and TanStack Query (with an Orval-generated API client), featuring meal tracking, goal setting, and statistics.
 
 ## 🚀 Quick Start
 
@@ -204,7 +204,7 @@ const MyComponent = () => {
 ## 🚀 Deployment
 
 ### Vercel
-Production deploys run from GitHub Actions (`.github/workflows/frontend-deploy.yml`) after `Frontend CI` succeeds on `main` (or on `v*` tags / manual dispatch): `bun run build`, then `vercel --prod`. To deploy manually:
+Production deploys run from GitHub Actions (`.github/workflows/deploy.yml`) when a release is published, after `Frontend CI` passes on the release commit: `bun run build`, then `vercel --prod`. Vercel's Git integration does not deploy pushes to `main` (`vercel.json` sets `git.deploymentEnabled.main` to `false`); it still builds preview deployments for pull requests. To deploy manually:
 ```bash
 bun install --global vercel
 vercel --prod
@@ -230,7 +230,7 @@ VITE_API_BASE_URL=https://your-api-domain.com
 
 ### Performance Optimization
 - **Code Splitting**: Route-based splitting with `React.lazy()`
-- **Vendor Chunks**: `react-vendor`, `chart-vendor`, `i18n-vendor` (`manualChunks` in `vite.config.ts`)
+- **Vendor Chunks**: `react-vendor`, `chart-vendor`, `i18n-vendor` (`codeSplitting.groups` in `vite.config.ts`)
 - **Tree Shaking**: Unused code elimination
 
 ## 📊 Performance

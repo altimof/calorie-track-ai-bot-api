@@ -355,24 +355,18 @@ graph TD
 
 ### CI/CD Pipeline
 
-There is no dedicated integration-test workflow. Workflows trigger on path-based changes:
+There is no dedicated integration-test workflow. CI workflows trigger on path-based changes; deploys run only from a published release:
 
 ```mermaid
 graph LR
-    subgraph "Backend"
-        BCI[backend-ci.yml<br/>ruff, pyright, pytest -q]
-        BBUILD[backend-build.yml]
-        BDEPLOY[backend-deploy.yml<br/>Fly.io]
-    end
+    BCI[backend-ci.yml<br/>ruff, pyright, pytest -q]
+    FCI[frontend-ci.yml<br/>Orval drift check, vitest, build]
+    RP[release-please.yml<br/>release PR, vX.Y.Z]
+    DEPLOY[deploy.yml<br/>GHCR, Fly.io, Vercel]
 
-    subgraph "Frontend"
-        FCI[frontend-ci.yml<br/>Orval drift check, vitest, build]
-        FDEPLOY[frontend-deploy.yml<br/>Vercel]
-    end
-
-    BCI --> BBUILD
-    BBUILD --> BDEPLOY
-    FCI --> FDEPLOY
+    RP --> DEPLOY
+    BCI -. gate .-> DEPLOY
+    FCI -. gate .-> DEPLOY
 ```
 
 - `backend-ci.yml` runs `uv run pytest -q` over all of `backend/tests/` (including `tests/integration/`) with dummy env vars; no Postgres or Redis service containers are started (tests mock the DB pool, queue, and bot).
