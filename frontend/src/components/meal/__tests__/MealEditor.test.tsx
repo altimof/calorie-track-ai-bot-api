@@ -45,4 +45,40 @@ describe("MealEditor", () => {
     await userEvent.click(screen.getByRole("button", { name: /cancel/i }));
     expect(onCancel).toHaveBeenCalled();
   });
+
+  describe("closing confirmation", () => {
+    const webapp = window.Telegram!.WebApp as Required<TelegramWebApp>;
+
+    it("warns while a field differs and stops when it is typed back", async () => {
+      const enable = vi.spyOn(webapp, "enableClosingConfirmation");
+      const disable = vi.spyOn(webapp, "disableClosingConfirmation");
+      renderWithProviders(
+        <MealEditor meal={defaultMeal} onSave={vi.fn()} onCancel={vi.fn()} />,
+      );
+      const protein = screen.getByLabelText(/protein/i);
+
+      await userEvent.clear(protein);
+      await userEvent.type(protein, "50");
+      expect(enable).toHaveBeenCalledTimes(1);
+
+      // Calories are recalculated from the macros (408, not the original 450),
+      // but every field the user can edit matches again
+      await userEvent.clear(protein);
+      await userEvent.type(protein, "35");
+      expect(disable).toHaveBeenCalledTimes(1);
+      enable.mockRestore();
+      disable.mockRestore();
+    });
+
+    it("stops warning when the editor closes", async () => {
+      const disable = vi.spyOn(webapp, "disableClosingConfirmation");
+      const { unmount } = renderWithProviders(
+        <MealEditor meal={defaultMeal} onSave={vi.fn()} onCancel={vi.fn()} />,
+      );
+      await userEvent.type(screen.getByLabelText(/description/i), " salad");
+      unmount();
+      expect(disable).toHaveBeenCalledTimes(1);
+      disable.mockRestore();
+    });
+  });
 });

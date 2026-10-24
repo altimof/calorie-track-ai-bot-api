@@ -28,7 +28,7 @@ bun run vitest run src/path/to/file.test.ts -t "name" # Single test
 
 ### Entry & Routing
 
-`src/main.tsx` imports `app.css` and i18n, initializes the Telegram WebApp (only when `initData` is present: `ready()`, `expand()`, closing confirmation, header/bg colors), then mounts the React app.
+`src/main.tsx` imports `app.css` and i18n, initializes the Telegram WebApp (only when `initData` is present: `ready()`, `expand()`, header/bg colors), then mounts the React app.
 
 `src/app.tsx` is the core component: creates the `QueryClient` and a `createBrowserRouter` with 4 lazy-loaded pages (`/` -> Meals, `/stats`, `/goals`, `/feedback`) as children of the `AppLayout` layout route. Provider order: `QueryClientProvider` > `TelegramProvider` > `RouterProvider`. `AppLayout` wraps the `<Outlet />` in `ErrorBoundary` + `Suspense` and renders `Navigation`.
 
@@ -39,6 +39,7 @@ bun run vitest run src/path/to/file.test.ts -t "name" # Single test
 - Language detection (Telegram `language_code`, then browser locale; `en`/`ru` only; `setLanguage()` override, not persisted)
 - Safe areas read from `--safe-area-*` CSS variables, refreshed on resize
 - Exposes `user`, `initData`, `theme`, `language`, `safeAreas` via `useTelegram()`
+- Closing confirmation: `useClosingConfirmation(isDirty)` registers a form with unsaved changes; Telegram's "Changes you have made may not be saved" prompt is enabled only while at least one form is registered. Don't call `enableClosingConfirmation()` unconditionally (e.g. in `main.tsx`)
 
 For API requests, `src/api/client.ts` takes the user ID from `window.Telegram?.WebApp?.initDataUnsafe?.user?.id`, falling back to `VITE_DEV_USER_ID` (or a hardcoded ID) in dev only.
 
@@ -103,7 +104,7 @@ src/
     goals/              # Goals page
     feedback/           # Feedback page
   providers/
-    telegram.tsx        # TelegramProvider (theme, language, safe areas, user)
+    telegram.tsx        # TelegramProvider (theme, language, safe areas, user, closing confirmation)
   test/
     setup.ts            # Vitest setup with mocks
     utils.tsx           # renderWithProviders helper

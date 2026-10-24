@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useClosingConfirmation } from "@/hooks/useClosingConfirmation";
+import { useClosingConfirmation } from "@/providers/telegram";
 
 interface MealFormData {
   description: string;
@@ -19,6 +19,8 @@ interface MealEditorProps {
 
 export type { MealFormData };
 
+const EDITABLE_FIELDS = ["description", "protein", "carbs", "fats"] as const;
+
 export function MealEditor({
   meal,
   onSave,
@@ -27,10 +29,10 @@ export function MealEditor({
 }: MealEditorProps) {
   const { t } = useTranslation();
   const [form, setForm] = useState<MealFormData>(meal);
+  // Only the fields the user types into: calories is recalculated from the macros
+  // and rarely equals the AI's original value, so it would stay "changed".
   useClosingConfirmation(
-    (Object.keys(meal) as (keyof MealFormData)[]).some(
-      (field) => form[field] !== meal[field],
-    ),
+    EDITABLE_FIELDS.some((field) => form[field] !== meal[field]),
   );
 
   const handleChange = (field: keyof MealFormData, value: string) => {

@@ -11,7 +11,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { unwrap } from "@/api/unwrap";
 import { formatDate } from "@/utils/date";
-import { useClosingConfirmation } from "@/hooks/useClosingConfirmation";
+import { useClosingConfirmation } from "@/providers/telegram";
 import type { GoalResponse, DailySummary } from "@/api/model";
 
 export default function GoalsPage() {
@@ -19,6 +19,8 @@ export default function GoalsPage() {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [goalInput, setGoalInput] = useState("");
+  // The value the edit form opened with, so a refetch can't move the baseline
+  const [editBaseline, setEditBaseline] = useState("");
   const [error, setError] = useState("");
   const [mutationError, setMutationError] = useState<string | null>(null);
 
@@ -37,15 +39,16 @@ export default function GoalsPage() {
     queryClient.invalidateQueries({ queryKey: ["/api/v1/daily-summary"] });
   }, [queryClient]);
 
-  const initialGoalInput = goal?.daily_kcal_target?.toString() ?? "2000";
-  useClosingConfirmation(editing && goalInput !== initialGoalInput);
+  useClosingConfirmation(editing && goalInput !== editBaseline);
 
   const handleEdit = useCallback(() => {
-    setGoalInput(initialGoalInput);
+    const initial = goal?.daily_kcal_target?.toString() ?? "2000";
+    setGoalInput(initial);
+    setEditBaseline(initial);
     setError("");
     setMutationError(null);
     setEditing(true);
-  }, [initialGoalInput]);
+  }, [goal]);
 
   const handleSave = useCallback(() => {
     const value = parseInt(goalInput, 10);

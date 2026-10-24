@@ -5,6 +5,7 @@ import {
   useEffect,
   useCallback,
   useMemo,
+  useRef,
   type ReactNode,
 } from "react";
 import i18n from "@/i18n";
@@ -27,6 +28,10 @@ interface TelegramContextValue {
 }
 
 const TelegramContext = createContext<TelegramContextValue | null>(null);
+
+// Marks a form as having unsaved changes (or not). Each form passes its own token.
+type SetFormDirty = (form: symbol, dirty: boolean) => void;
+const ClosingConfirmationContext = createContext<SetFormDirty | null>(null);
 
 function resolveTheme(): "light" | "dark" {
   const tgScheme = window.Telegram?.WebApp?.colorScheme;
@@ -83,6 +88,19 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
     i18n.changeLanguage(language);
   }, [language]);
 
+  // Forms with unsaved changes. Telegram asks to confirm closing the Mini App
+  // only while this is non-empty; adding or removing a form twice has no effect.
+  const dirtyForms = useRef(new Set<symbol>());
+  const setFormDirty = useCallback<SetFormDirty>((form, dirty) => {
+    const forms = dirtyForms.current;
+    const wasDirty = forms.size > 0;
+    if (dirty) forms.add(form);
+    else forms.delete(form);
+    const tg = window.Telegram?.WebApp;
+    if (!wasDirty && forms.size > 0) tg?.enableClosingConfirmation?.();
+    if (wasDirty && forms.size === 0) tg?.disableClosingConfirmation?.();
+  }, []);
+
   useEffect(() => {
     const handleResize = () => setSafeAreas(getSafeAreas());
     window.addEventListener("resize", handleResize);
@@ -104,7 +122,9 @@ export function TelegramProvider({ children }: { children: ReactNode }) {
 
   return (
     <TelegramContext.Provider value={value}>
-      {children}
+      <ClosingConfirmationContext.Provider value={setFormDirty}>
+        {children}
+      </ClosingConfirmationContext.Provider>
     </TelegramContext.Provider>
   );
 }
@@ -114,4 +134,20 @@ export function useTelegram(): TelegramContextValue {
   if (!context)
     throw new Error("useTelegram must be used within TelegramProvider");
   return context;
+}
+
+/**
+ * Ask Telegram to confirm closing the Mini App while `isDirty` is true, i.e. while
+ * this form has unsaved changes. The form stops counting when it is saved,
+ * cancelled or unmounted. Does nothing outside TelegramProvider.
+ */
+export function useClosingConfirmation(isDirty: boolean): void {
+  const setFormDirty = useContext(ClosingConfirmationContext);
+  const [form] = useState(() => Symbol("form"));
+
+  useEffect(() => {
+    if (!setFormDirty || !isDirty) return;
+    setFormDirty(form, true);
+    return () => setFormDirty(form, false);
+  }, [setFormDirty, form, isDirty]);
 }

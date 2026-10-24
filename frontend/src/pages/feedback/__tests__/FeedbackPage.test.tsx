@@ -1,5 +1,13 @@
-import { describe, it, expect, beforeAll, afterEach, afterAll } from "vitest";
-import { screen } from "@testing-library/react";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterEach,
+  afterAll,
+  vi,
+} from "vitest";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { setupServer } from "msw/node";
 import { http, HttpResponse } from "msw";
@@ -45,5 +53,35 @@ describe("FeedbackPage", () => {
     renderWithProviders(<FeedbackPage />);
     await userEvent.type(screen.getByRole("textbox"), "Great app!");
     expect(screen.getByRole("button", { name: /send/i })).toBeEnabled();
+  });
+
+  describe("closing confirmation", () => {
+    const webapp = window.Telegram!.WebApp as Required<TelegramWebApp>;
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("warns while a message is typed and stops after it is sent", async () => {
+      const enable = vi.spyOn(webapp, "enableClosingConfirmation");
+      const disable = vi.spyOn(webapp, "disableClosingConfirmation");
+      renderWithProviders(<FeedbackPage />);
+
+      await userEvent.type(screen.getByRole("textbox"), "Great app");
+      expect(enable).toHaveBeenCalledTimes(1);
+
+      await userEvent.click(screen.getByRole("button", { name: /send/i }));
+      await waitFor(() => expect(disable).toHaveBeenCalledTimes(1));
+    });
+
+    it("stops warning when the message is cleared", async () => {
+      const disable = vi.spyOn(webapp, "disableClosingConfirmation");
+      renderWithProviders(<FeedbackPage />);
+      const box = screen.getByRole("textbox");
+
+      await userEvent.type(box, "Hi");
+      await userEvent.clear(box);
+      expect(disable).toHaveBeenCalledTimes(1);
+    });
   });
 });

@@ -25,8 +25,9 @@ interface TelegramWebApp {
   ready: () => void;
   setHeaderColor: (color: string) => void;
   setBackgroundColor: (color: string) => void;
-  enableClosingConfirmation: () => void;
-  disableClosingConfirmation: () => void;
+  // Missing in Telegram clients older than Bot API 6.2
+  enableClosingConfirmation?: () => void;
+  disableClosingConfirmation?: () => void;
   HapticFeedback: {
     impactOccurred: (style: string) => void;
     notificationOccurred: (type: string) => void;

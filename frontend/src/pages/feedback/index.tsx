@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSubmitFeedbackApiV1FeedbackPost } from "@/api/queries/feedback/feedback";
-import { useClosingConfirmation } from "@/hooks/useClosingConfirmation";
+import { useClosingConfirmation } from "@/providers/telegram";
 
 const MAX_LENGTH = 5000;
 
