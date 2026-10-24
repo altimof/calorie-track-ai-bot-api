@@ -21,6 +21,7 @@ interface TelegramWebApp {
   viewportStableHeight: number;
   expand: () => void;
   close: () => void;
+  showAlert: (message: string, callback?: () => void) => void;
   ready: () => void;
   setHeaderColor: (color: string) => void;
   setBackgroundColor: (color: string) => void;

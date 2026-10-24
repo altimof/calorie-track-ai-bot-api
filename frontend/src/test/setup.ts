@@ -70,6 +70,7 @@ window.Telegram = {
     viewportStableHeight: 800,
     expand: () => {},
     close: () => {},
+    showAlert: () => {},
     ready: () => {},
     setHeaderColor: () => {},
     setBackgroundColor: () => {},

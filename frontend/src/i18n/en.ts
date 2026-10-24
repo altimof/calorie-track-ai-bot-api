@@ -209,6 +209,8 @@ const en = {
   },
   common: {
     retry: "Retry",
+    sessionExpired:
+      "Your session has expired. Please reopen the app to continue.",
   },
   share: {
     button: "Share",
