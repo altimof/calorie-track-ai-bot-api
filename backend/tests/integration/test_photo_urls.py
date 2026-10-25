@@ -13,7 +13,6 @@ from calorie_track_ai_bot.services.db import (
     _enhance_meal_with_related_data,
     db_create_meal_from_estimate,
     db_get_meal,
-    db_get_meals_by_date,
 )
 
 
@@ -75,7 +74,7 @@ class TestPhotoUrlGeneration:
 
             # For db_get_meal: fetchone returns one row
             mock_cursor.fetchone = AsyncMock(return_value=mock_meal_data)
-            # For db_get_meals_by_date: fetchall returns list
+            # For list queries: fetchall returns list
             mock_cursor.fetchall = AsyncMock(return_value=[mock_meal_data])
 
             mock_resolve.return_value = "user-uuid-123"
@@ -199,18 +198,6 @@ class TestPhotoUrlGeneration:
         meal = await db_get_meal("meal-uuid-123")
 
         assert meal is not None
-        assert "photo_url" in meal
-        assert meal["photo_url"] == "https://photos.example.com/test123.jpg"
-        assert "macros" in meal
-        assert "corrected" in meal
-
-    @pytest.mark.asyncio
-    async def test_get_meals_by_date_includes_photo_urls(self, mock_db_operations):
-        """Test that db_get_meals_by_date returns meals with photo URLs."""
-        meals = await db_get_meals_by_date("2025-01-27", "telegram-user-123")
-
-        assert len(meals) == 1
-        meal = meals[0]
         assert "photo_url" in meal
         assert meal["photo_url"] == "https://photos.example.com/test123.jpg"
         assert "macros" in meal

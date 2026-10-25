@@ -13,7 +13,7 @@ from ...schemas import (
 from .. import database
 from ..config import logger
 from ..storage import BUCKET_NAME, s3
-from ._base import LOCAL_MEAL_DATE_SQL, resolve_user_id
+from ._base import LOCAL_MEAL_DATE_SQL
 from .estimates import db_get_estimate, db_get_user_estimate
 from .photos import db_get_photo
 
@@ -179,31 +179,6 @@ async def _enhance_meal_with_related_data(meal: dict[str, Any]) -> None:
     meal["description"] = _generate_meal_description(estimate)
     meal["corrected"] = False
     _ensure_updated_at(meal)
-
-
-async def db_get_meals_by_date(
-    meal_date: str, telegram_user_id: str | None = None
-) -> list[dict[str, Any]]:
-    """Get meals for a specific date with related data."""
-    pool = await database.get_pool()
-
-    user_id = await resolve_user_id(telegram_user_id)
-
-    async with pool.connection() as conn:
-        if user_id:
-            cur = await conn.execute(
-                "SELECT * FROM meals WHERE meal_date = %s AND user_id = %s",
-                (meal_date, user_id),
-            )
-        else:
-            cur = await conn.execute("SELECT * FROM meals WHERE meal_date = %s", (meal_date,))
-        rows = await cur.fetchall()
-        meals = [dict(r) for r in rows]
-
-    for meal in meals:
-        await _enhance_meal_with_related_data(meal)
-
-    return meals
 
 
 async def db_get_meal(meal_id: str) -> dict[str, Any] | None:

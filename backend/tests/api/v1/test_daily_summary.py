@@ -7,6 +7,10 @@ from fastapi.testclient import TestClient
 
 from calorie_track_ai_bot.api.v1.daily_summary import router
 
+# Internal user ID the autouse registered_user fixture (conftest) resolves every
+# Telegram user to; routes pass it, not the Telegram ID, to the DB layer.
+INTERNAL_USER_ID = "550e8400-e29b-41d4-a716-446655440000"
+
 
 class TestDailySummaryEndpoints:
     """Test daily summary-related endpoints with user ID detection."""
@@ -83,7 +87,7 @@ class TestDailySummaryEndpoints:
         assert data == mock_daily_summary_data
 
         # Verify that db_get_daily_summary was called with the correct parameters
-        mock_db_get_daily_summary.assert_called_once_with("2025-09-28", "59357664", tz="UTC")
+        mock_db_get_daily_summary.assert_called_once_with("2025-09-28", INTERNAL_USER_ID, tz="UTC")
 
     def test_get_daily_summary_without_user_id_header(self, client):
         """Test getting daily summary without x-user-id header returns 401."""
@@ -101,7 +105,7 @@ class TestDailySummaryEndpoints:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["user_id"] == "59357664"
+        assert data["user_id"] == INTERNAL_USER_ID
         assert data["date"] == "2025-09-28"
         assert data["kcal_total"] == 0
         assert data["macros_totals"] == {"protein_g": 0, "fat_g": 0, "carbs_g": 0}
@@ -132,7 +136,7 @@ class TestDailySummaryEndpoints:
         assert data == mock_today_data
 
         # Verify that db_get_today_data was called with the correct parameters
-        mock_db_get_today_data.assert_called_once_with("2025-09-28", "59357664", tz="UTC")
+        mock_db_get_today_data.assert_called_once_with("2025-09-28", INTERNAL_USER_ID, tz="UTC")
 
     def test_get_today_data_without_user_id_header(self, client):
         """Test getting today data without x-user-id header returns 401."""
@@ -167,7 +171,7 @@ class TestDailySummaryEndpoints:
 
         assert response.status_code == 401
 
-    def test_user_id_with_whitespace(self, client):
+    def test_user_id_with_whitespace(self, client, registered_user):
         """Test user ID with leading/trailing whitespace."""
         with patch(
             "calorie_track_ai_bot.api.v1.daily_summary.db_get_daily_summary"
@@ -178,10 +182,11 @@ class TestDailySummaryEndpoints:
             response = client.get("/daily-summary/2025-09-28", headers=headers)
 
             assert response.status_code == 200
-            # Should use the user ID as-is (including whitespace)
+            # The header is looked up as-is (including whitespace); the DB gets the internal ID
             mock_db_get_daily_summary.assert_called_once_with(
-                "2025-09-28", "  59357664  ", tz="UTC"
+                "2025-09-28", INTERNAL_USER_ID, tz="UTC"
             )
+            registered_user.assert_awaited_once_with("  59357664  ")
 
     def test_user_id_case_sensitivity(self, client):
         """Test that x-user-id header is case insensitive (FastAPI behavior)."""
@@ -195,10 +200,12 @@ class TestDailySummaryEndpoints:
             response = client.get("/daily-summary/2025-09-28", headers=headers)
 
             assert response.status_code == 200
-            # Should use the user ID since FastAPI is case-insensitive
-            mock_db_get_daily_summary.assert_called_once_with("2025-09-28", "59357664", tz="UTC")
+            # FastAPI headers are case-insensitive; the DB gets the internal ID
+            mock_db_get_daily_summary.assert_called_once_with(
+                "2025-09-28", INTERNAL_USER_ID, tz="UTC"
+            )
 
-    def test_multiple_user_id_headers(self, client):
+    def test_multiple_user_id_headers(self, client, registered_user):
         """Test behavior with multiple x-user-id headers (HTTP spec behavior)."""
         with patch(
             "calorie_track_ai_bot.api.v1.daily_summary.db_get_daily_summary"
@@ -211,13 +218,14 @@ class TestDailySummaryEndpoints:
             response = client.get("/daily-summary/2025-09-28", headers=headers)
 
             assert response.status_code == 200
-            # Should use the full comma-separated value
+            # The full comma-separated value is looked up; the DB gets the internal ID
             mock_db_get_daily_summary.assert_called_once_with(
-                "2025-09-28", "59357664,99999999", tz="UTC"
+                "2025-09-28", INTERNAL_USER_ID, tz="UTC"
             )
+            registered_user.assert_awaited_once_with("59357664,99999999")
 
-    def test_special_characters_in_user_id(self, client):
-        """Test user ID with special characters (should still be passed as is)."""
+    def test_special_characters_in_user_id(self, client, registered_user):
+        """Test user ID with special characters (looked up as is)."""
         with patch(
             "calorie_track_ai_bot.api.v1.daily_summary.db_get_daily_summary"
         ) as mock_db_get_daily_summary:
@@ -228,9 +236,12 @@ class TestDailySummaryEndpoints:
             response = client.get("/daily-summary/2025-09-28", headers=headers)
 
             assert response.status_code == 200
-            mock_db_get_daily_summary.assert_called_once_with("2025-09-28", special_id, tz="UTC")
+            mock_db_get_daily_summary.assert_called_once_with(
+                "2025-09-28", INTERNAL_USER_ID, tz="UTC"
+            )
+            registered_user.assert_awaited_once_with(special_id)
 
-    def test_very_long_user_id(self, client):
+    def test_very_long_user_id(self, client, registered_user):
         """Test user ID with very long string."""
         with patch(
             "calorie_track_ai_bot.api.v1.daily_summary.db_get_daily_summary"
@@ -242,10 +253,13 @@ class TestDailySummaryEndpoints:
             response = client.get("/daily-summary/2025-09-28", headers=headers)
 
             assert response.status_code == 200
-            # Should use the user ID as-is
-            mock_db_get_daily_summary.assert_called_once_with("2025-09-28", long_user_id, tz="UTC")
+            # The header is looked up as-is; the DB gets the internal ID
+            mock_db_get_daily_summary.assert_called_once_with(
+                "2025-09-28", INTERNAL_USER_ID, tz="UTC"
+            )
+            registered_user.assert_awaited_once_with(long_user_id)
 
-    def test_numeric_user_id(self, client):
+    def test_numeric_user_id(self, client, registered_user):
         """Test user ID that is purely numeric."""
         with patch(
             "calorie_track_ai_bot.api.v1.daily_summary.db_get_daily_summary"
@@ -256,10 +270,13 @@ class TestDailySummaryEndpoints:
             response = client.get("/daily-summary/2025-09-28", headers=headers)
 
             assert response.status_code == 200
-            # Should use the user ID as-is
-            mock_db_get_daily_summary.assert_called_once_with("2025-09-28", "123456789", tz="UTC")
+            # The header is looked up as-is; the DB gets the internal ID
+            mock_db_get_daily_summary.assert_called_once_with(
+                "2025-09-28", INTERNAL_USER_ID, tz="UTC"
+            )
+            registered_user.assert_awaited_once_with("123456789")
 
-    def test_uuid_user_id(self, client):
+    def test_uuid_user_id(self, client, registered_user):
         """Test user ID that is a UUID."""
         with patch(
             "calorie_track_ai_bot.api.v1.daily_summary.db_get_daily_summary"
@@ -271,5 +288,8 @@ class TestDailySummaryEndpoints:
             response = client.get("/daily-summary/2025-09-28", headers=headers)
 
             assert response.status_code == 200
-            # Should use the user ID as-is
-            mock_db_get_daily_summary.assert_called_once_with("2025-09-28", uuid_user_id, tz="UTC")
+            # The header is looked up as-is; the DB gets the internal ID
+            mock_db_get_daily_summary.assert_called_once_with(
+                "2025-09-28", INTERNAL_USER_ID, tz="UTC"
+            )
+            registered_user.assert_awaited_once_with(uuid_user_id)

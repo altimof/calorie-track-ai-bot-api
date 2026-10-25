@@ -2,16 +2,11 @@ import uuid
 from typing import Any
 
 from .. import database
-from ._base import resolve_user_id
 
 
-async def db_get_goal(telegram_user_id: str) -> dict[str, Any] | None:
+async def db_get_goal(user_id: str) -> dict[str, Any] | None:
     """Get user's goal."""
     pool = await database.get_pool()
-
-    user_id = await resolve_user_id(telegram_user_id)
-    if not user_id:
-        return None
 
     async with pool.connection() as conn:
         cur = await conn.execute("SELECT * FROM goals WHERE user_id = %s", (user_id,))
@@ -19,15 +14,11 @@ async def db_get_goal(telegram_user_id: str) -> dict[str, Any] | None:
         return dict(row) if row else None
 
 
-async def db_create_or_update_goal(telegram_user_id: str, daily_kcal_target: int) -> dict[str, Any]:
+async def db_create_or_update_goal(user_id: str, daily_kcal_target: int) -> dict[str, Any]:
     """Create or update user's goal."""
     pool = await database.get_pool()
 
-    user_id = await resolve_user_id(telegram_user_id)
-    if not user_id:
-        raise ValueError(f"Could not resolve user ID for telegram_user_id: {telegram_user_id}")
-
-    existing = await db_get_goal(telegram_user_id)
+    existing = await db_get_goal(user_id)
 
     async with pool.connection() as conn:
         if existing:
