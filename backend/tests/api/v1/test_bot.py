@@ -705,3 +705,40 @@ class TestBotWebhook:
             # The photo should be added to time-based grouping, not processed immediately
             # This tests that the new logic is being used instead of immediate processing
             mock_create_photo.assert_not_called()
+
+
+class TestWebhookSecretToken:
+    """POST /bot accepts only updates carrying the configured secret token."""
+
+    SECRET = "test-webhook-secret_123"
+
+    @pytest.fixture
+    def client(self):
+        with patch("calorie_track_ai_bot.api.v1.bot.TELEGRAM_WEBHOOK_SECRET", self.SECRET):
+            yield TestClient(app)
+
+    def test_missing_secret_token_rejected(self, client):
+        response = client.post("/bot", json={"update_id": 1})
+        assert response.status_code == 403
+
+    def test_wrong_secret_token_rejected(self, client):
+        response = client.post(
+            "/bot",
+            json={"update_id": 1},
+            headers={"X-Telegram-Bot-Api-Secret-Token": "wrong"},
+        )
+        assert response.status_code == 403
+
+    def test_matching_secret_token_accepted(self, client):
+        response = client.post(
+            "/bot",
+            json={"update_id": 1},
+            headers={"X-Telegram-Bot-Api-Secret-Token": self.SECRET},
+        )
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok"}
+
+    def test_no_secret_configured_accepts_updates(self):
+        with patch("calorie_track_ai_bot.api.v1.bot.TELEGRAM_WEBHOOK_SECRET", None):
+            response = TestClient(app).post("/bot", json={"update_id": 1})
+        assert response.status_code == 200

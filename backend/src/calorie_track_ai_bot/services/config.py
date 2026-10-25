@@ -71,6 +71,9 @@ MEMORY_THRESHOLD_MB: float = float(os.getenv("MEMORY_THRESHOLD_MB", "100"))
 CPU_THRESHOLD_PERCENT: float = float(os.getenv("CPU_THRESHOLD_PERCENT", "200"))
 WEBHOOK_URL: str | None = os.getenv("WEBHOOK_URL")
 USE_WEBHOOK: bool = os.getenv("USE_WEBHOOK", "false").lower() == "true"
+# Sent by Telegram in X-Telegram-Bot-Api-Secret-Token on every webhook update once
+# registered with setWebhook; 1-256 chars of A-Z, a-z, 0-9, _ and -. Unset: not checked.
+TELEGRAM_WEBHOOK_SECRET: str | None = os.getenv("TELEGRAM_WEBHOOK_SECRET") or None
 ENABLE_WORKER: bool = os.getenv("ENABLE_WORKER", "false").lower() == "true"
 
 

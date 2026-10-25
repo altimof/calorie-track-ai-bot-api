@@ -146,6 +146,7 @@ The application requires the following environment variables:
 - `OPENAI_MODEL`: OpenAI model for image analysis (default `gpt-5-mini`)
 - `WEBHOOK_URL`: Telegram webhook URL (set in `fly.toml` for production)
 - `USE_WEBHOOK`: Set webhook automatically on startup (true/false, default false)
+- `TELEGRAM_WEBHOOK_SECRET`: Secret registered with the webhook on startup; `POST /bot` then rejects updates that don't carry it (403). 1-256 chars of `A-Z a-z 0-9 _ -`, e.g. `fly secrets set TELEGRAM_WEBHOOK_SECRET=$(openssl rand -hex 32)`. Unset: updates are not verified
 - `ENABLE_WORKER`: Run the estimate worker inside the API process (true/false, default false; `true` in `fly.toml`)
 - `CORS_ORIGINS`, `TRUSTED_HOSTS`: Comma-separated overrides for the defaults in `services/config.py`
 - `INLINE_MODE_ENABLED`, `INLINE_HASH_SALT`: Telegram inline mode settings

@@ -1,4 +1,5 @@
 import asyncio
+import hmac
 import json
 import re
 import time
@@ -11,7 +12,13 @@ from pydantic import BaseModel, Field
 
 from ...schemas import InlineChatType, InlineTriggerType
 from ...services import telegram
-from ...services.config import TELEGRAM_BOT_TOKEN, USE_WEBHOOK, WEBHOOK_URL, logger
+from ...services.config import (
+    TELEGRAM_BOT_TOKEN,
+    TELEGRAM_WEBHOOK_SECRET,
+    USE_WEBHOOK,
+    WEBHOOK_URL,
+    logger,
+)
 from ...services.db import db_create_photo, db_get_or_create_user
 from ...services.inline_renderer import build_inline_placeholder
 from ...services.queue import InlineQueueThrottleError, enqueue_estimate_job, enqueue_inline_job
@@ -427,9 +434,21 @@ async def handle_inline_tagged_photo(message: TelegramMessage) -> dict[str, Any]
     }
 
 
+def _is_from_telegram(request: Request) -> bool:
+    """Check the secret token Telegram sends with every update, when one is configured."""
+    if not TELEGRAM_WEBHOOK_SECRET:
+        return True
+    received = request.headers.get("x-telegram-bot-api-secret-token", "")
+    return hmac.compare_digest(received.encode(), TELEGRAM_WEBHOOK_SECRET.encode())
+
+
 @router.post("/bot")
 async def telegram_webhook(request: Request):
     """Handle Telegram webhook updates."""
+    if not _is_from_telegram(request):
+        logger.warning("Rejected webhook update without a valid secret token")
+        raise HTTPException(status_code=403, detail="Forbidden")
+
     try:
         # Parse the incoming webhook data
         data = await request.json()
@@ -1051,7 +1070,7 @@ async def setup_webhook():
 
     try:
         bot = telegram.get_bot()
-        success = await bot.set_webhook(WEBHOOK_URL)
+        success = await bot.set_webhook(WEBHOOK_URL, secret_token=TELEGRAM_WEBHOOK_SECRET)
 
         if success:
             logger.info(f"Webhook set successfully: {WEBHOOK_URL}")

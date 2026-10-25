@@ -26,6 +26,7 @@ from .api.v1 import (
 from .services.config import (
     ENABLE_WORKER,
     TELEGRAM_BOT_TOKEN,
+    TELEGRAM_WEBHOOK_SECRET,
     USE_WEBHOOK,
     WEBHOOK_URL,
     get_app_env,
@@ -135,7 +136,11 @@ async def lifespan(app: FastAPI):
         logger.info("Setting up Telegram webhook automatically...")
         try:
             bot = get_bot()
-            success = await bot.set_webhook(WEBHOOK_URL)
+            success = await bot.set_webhook(WEBHOOK_URL, secret_token=TELEGRAM_WEBHOOK_SECRET)
+            if not TELEGRAM_WEBHOOK_SECRET:
+                logger.warning(
+                    "TELEGRAM_WEBHOOK_SECRET is not set: webhook updates are not verified"
+                )
             if success:
                 logger.info(f"✅ Telegram webhook set successfully: {WEBHOOK_URL}")
             else:

@@ -123,10 +123,16 @@ class TelegramBot:
             logger.error(f"Error sending chat action: {e}")
             return False
 
-    async def set_webhook(self, webhook_url: str) -> bool:
-        """Set the webhook URL for the bot."""
+    async def set_webhook(self, webhook_url: str, secret_token: str | None = None) -> bool:
+        """Set the webhook URL for the bot.
+
+        With secret_token, Telegram sends it in X-Telegram-Bot-Api-Secret-Token on
+        every update, so the webhook can reject requests that don't come from Telegram.
+        """
         url = f"{self.base_url}/setWebhook"
         data = {"url": webhook_url}
+        if secret_token:
+            data["secret_token"] = secret_token
 
         logger.info(f"Setting webhook URL: {webhook_url}")
 
