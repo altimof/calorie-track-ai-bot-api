@@ -96,6 +96,28 @@ class TestEstimateWorker:
         mock_dependencies["send_estimate"].assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_handle_job_saves_under_assigned_estimate_id(self, mock_dependencies):
+        """The estimate is saved under the ID handed out at enqueue."""
+        job = {"photo_id": "photo123", "estimate_id": "estimate-assigned"}
+
+        await handle_job(job)
+
+        call_args = mock_dependencies["db_save"].call_args
+        assert call_args.kwargs["estimate_id"] == "estimate-assigned"
+
+    @pytest.mark.asyncio
+    async def test_handle_job_passes_estimate_id_to_multiphoto_job(self):
+        """Multi-photo jobs get the estimate ID assigned at enqueue."""
+        job = {"photo_ids": ["p1", "p2"], "estimate_id": "estimate-assigned"}
+
+        with patch(
+            "calorie_track_ai_bot.workers.estimate_worker.handle_multiphotos_job"
+        ) as mock_multi:
+            await handle_job(job)
+
+        mock_multi.assert_awaited_once_with(["p1", "p2"], None, None, "estimate-assigned")
+
+    @pytest.mark.asyncio
     async def test_handle_job_with_existing_confidence(self, mock_dependencies):
         """Test job handling when estimate already has confidence."""
         job = {"photo_id": "photo456"}

@@ -4,7 +4,7 @@ import hmac
 import json
 from hashlib import sha256
 from unittest.mock import AsyncMock, Mock, patch
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -50,9 +50,6 @@ class TestQueueFunctions:
 
         result = await enqueue_estimate_job(photo_id)
 
-        # Should return the photo_id
-        assert result == photo_id
-
         # Should call lpush with correct parameters
         mock_redis.lpush.assert_called_once()
         call_args = mock_redis.lpush.call_args
@@ -60,6 +57,10 @@ class TestQueueFunctions:
         assert call_args[0][0] == QUEUE
         job_data = json.loads(call_args[0][1])
         assert job_data["photo_ids"] == [photo_id]
+
+        # Should return the estimate ID the worker will save the estimate under
+        assert result == job_data["estimate_id"]
+        assert str(UUID(result)) == result
 
     @pytest.mark.asyncio
     async def test_enqueue_estimate_job_with_uuid(self, mock_redis):
@@ -73,13 +74,14 @@ class TestQueueFunctions:
 
         result = await enqueue_estimate_job(photo_id)
 
-        # Should return the photo_id
-        assert result == photo_id
-
         # Should call lpush with correct parameters
         call_args = mock_redis.lpush.call_args
         job_data = json.loads(call_args[0][1])
         assert job_data["photo_ids"] == [photo_id]
+
+        # The estimate ID is new, not the photo ID
+        assert result == job_data["estimate_id"]
+        assert result != photo_id
 
     @pytest.mark.asyncio
     async def test_dequeue_estimate_job_with_data(self, mock_redis):
@@ -187,7 +189,7 @@ class TestQueueFunctions:
 
         # Should be a valid JSON structure
         assert isinstance(job_data, dict)
-        assert len(job_data) == 2  # photo_ids and description fields
+        assert set(job_data) == {"photo_ids", "description", "estimate_id"}
 
     @pytest.mark.asyncio
     async def test_round_trip_job_processing(self, mock_redis):

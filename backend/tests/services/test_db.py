@@ -145,6 +145,18 @@ class TestDatabaseFunctions:
         assert len(result) == 36
         conn.execute.assert_awaited_once()
 
+    @pytest.mark.asyncio
+    async def test_db_save_estimate_uses_given_id(self, mock_pool):
+        """db_save_estimate saves under the ID assigned at enqueue when one is given."""
+        _pool, conn, _cursor = mock_pool
+
+        estimate_id = "00000000-0000-0000-0000-000000000abc"
+        result = await db_save_estimate("photo123", {"kcal_mean": 500}, estimate_id=estimate_id)
+
+        assert result == estimate_id
+        params = conn.execute.call_args[0][1]
+        assert params[0] == estimate_id
+
     # ------------------------------------------------------------------
     # db_get_estimate
     # ------------------------------------------------------------------

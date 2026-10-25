@@ -3,7 +3,7 @@ import hmac
 import json
 from datetime import UTC, datetime
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import redis.asyncio as redis
 from redis.asyncio.retry import Retry
@@ -61,7 +61,8 @@ async def enqueue_estimate_job(
         telegram_id: Telegram user ID for user identification
 
     Returns:
-        Job ID (first photo ID if single, or joined IDs if multiple)
+        ID the worker saves the estimate under; GET /estimates/{id} returns 404
+        until the estimate is done.
     """
     if r is None:
         raise RuntimeError("Redis configuration not available. Queue functionality is disabled.")
@@ -70,15 +71,19 @@ async def enqueue_estimate_job(
     if isinstance(photo_ids, str):
         photo_ids = [photo_ids]
 
-    job: dict[str, Any] = {"photo_ids": photo_ids, "description": description}
+    estimate_id = str(uuid4())
+    job: dict[str, Any] = {
+        "photo_ids": photo_ids,
+        "description": description,
+        "estimate_id": estimate_id,
+    }
     if chat_id is not None:
         job["chat_id"] = chat_id
     if telegram_id is not None:
         job["telegram_id"] = telegram_id
     await r.lpush(QUEUE, json.dumps(job))  # type: ignore
 
-    # Return first photo ID as job identifier
-    return photo_ids[0]
+    return estimate_id
 
 
 async def dequeue_estimate_job() -> dict[str, Any] | None:

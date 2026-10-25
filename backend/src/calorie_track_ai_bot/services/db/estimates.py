@@ -7,11 +7,15 @@ from .. import database
 
 
 async def db_save_estimate(
-    photo_id: str, est: dict[str, Any], photo_ids: list[str] | None = None
+    photo_id: str,
+    est: dict[str, Any],
+    photo_ids: list[str] | None = None,
+    estimate_id: str | None = None,
 ) -> str:
+    """Save an estimate under estimate_id (the ID handed out at enqueue), or a new UUID."""
     pool = await database.get_pool()
 
-    eid = str(uuid.uuid4())
+    eid = estimate_id or str(uuid.uuid4())
 
     # Build columns and values dynamically
     columns = [
