@@ -1,6 +1,7 @@
 """Tests for db module (psycopg3 / AsyncConnectionPool)."""
 
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -20,7 +21,10 @@ from calorie_track_ai_bot.services.db import (
     db_create_photo,
     db_delete_meal,
     db_fetch_inline_analytics,
+    db_get_daily_summary,
     db_get_estimate,
+    db_get_summaries_by_date_range,
+    db_get_today_data,
     db_get_user_estimate,
     db_increment_inline_permission_block,
     db_save_estimate,
@@ -51,6 +55,30 @@ def _make_mock_pool():
     pool.connection.return_value = ctx
 
     return pool, conn, cursor
+
+
+# The two meals from the user's report, plus a manual meal without macros
+SUMMARY_MEALS = [
+    {
+        "kcal_total": Decimal("1125"),
+        "protein_grams": Decimal("78"),
+        "fats_grams": Decimal("75"),
+        "carbs_grams": Decimal("30"),
+    },
+    {
+        "kcal_total": Decimal("75"),
+        "protein_grams": Decimal("5.5"),
+        "fats_grams": Decimal("5"),
+        "carbs_grams": Decimal("2"),
+    },
+    {
+        "kcal_total": Decimal("200"),
+        "protein_grams": None,
+        "fats_grams": None,
+        "carbs_grams": None,
+    },
+]
+SUMMARY_TOTALS = {"protein_g": 83.5, "fat_g": 80.0, "carbs_g": 32.0}
 
 
 class TestDatabaseFunctions:
@@ -206,6 +234,71 @@ class TestDatabaseFunctions:
         cursor.fetchone.return_value = None
 
         assert await db_get_user_estimate("estimate123", "other-user") is None
+
+    # ------------------------------------------------------------------
+    # daily summaries
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_db_get_daily_summary_sums_macros(self, mock_pool):
+        """The day's macros are the sum of its meals' macros; missing macros count as 0."""
+        _pool, conn, cursor = mock_pool
+        cursor.fetchall.return_value = SUMMARY_MEALS
+
+        summary = await db_get_daily_summary("2026-10-24", "user123", tz="America/Los_Angeles")
+
+        assert summary is not None
+        assert summary["kcal_total"] == 1400.0
+        assert summary["macros_totals"] == SUMMARY_TOTALS
+        sql = conn.execute.call_args[0][0]
+        assert "protein_grams" in sql and "fats_grams" in sql and "carbs_grams" in sql
+
+    @pytest.mark.asyncio
+    async def test_db_get_daily_summary_no_meals(self, mock_pool):
+        _pool, _conn, cursor = mock_pool
+        cursor.fetchall.return_value = []
+
+        summary = await db_get_daily_summary("2026-10-24", "user123")
+
+        assert summary is not None
+        assert summary["kcal_total"] == 0
+        assert summary["macros_totals"] == {"protein_g": 0, "fat_g": 0, "carbs_g": 0}
+
+    @pytest.mark.asyncio
+    async def test_db_get_summaries_by_date_range_sums_macros_per_day(self, mock_pool):
+        _pool, _conn, cursor = mock_pool
+        cursor.fetchall.return_value = [
+            {"meal_date": "2026-10-24", **meal} for meal in SUMMARY_MEALS
+        ] + [
+            {
+                "meal_date": "2026-10-23",
+                "kcal_total": Decimal("500"),
+                "protein_grams": Decimal("10"),
+                "fats_grams": Decimal("20"),
+                "carbs_grams": Decimal("30"),
+            },
+        ]
+
+        summaries = await db_get_summaries_by_date_range("2026-10-18", "2026-10-24", "user123")
+
+        assert summaries["2026-10-24"]["kcal_total"] == 1400.0
+        assert summaries["2026-10-24"]["macros_totals"] == SUMMARY_TOTALS
+        assert summaries["2026-10-23"]["macros_totals"] == {
+            "protein_g": 10.0,
+            "fat_g": 20.0,
+            "carbs_g": 30.0,
+        }
+
+    @pytest.mark.asyncio
+    async def test_db_get_today_data_sums_macros(self, mock_pool):
+        _pool, _conn, cursor = mock_pool
+        cursor.fetchall.return_value = SUMMARY_MEALS
+
+        data = await db_get_today_data("2026-10-24", "user123")
+
+        assert len(data["meals"]) == 3
+        assert data["daily_summary"]["kcal_total"] == 1400.0
+        assert data["daily_summary"]["macros_totals"] == SUMMARY_TOTALS
 
     # ------------------------------------------------------------------
     # db_create_meal_from_manual
