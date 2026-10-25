@@ -18,7 +18,7 @@ from .estimates import db_get_estimate, db_get_user_estimate
 from .photos import db_get_photo
 
 
-async def db_create_meal_from_manual(data: MealCreateManualRequest) -> dict[str, str]:
+async def db_create_meal_from_manual(data: MealCreateManualRequest, user_id: str) -> dict[str, str]:
     pool = await database.get_pool()
 
     mid = str(uuid.uuid4())
@@ -26,7 +26,7 @@ async def db_create_meal_from_manual(data: MealCreateManualRequest) -> dict[str,
         await conn.execute(
             """INSERT INTO meals (id, user_id, meal_date, meal_type, kcal_total, source)
                VALUES (%s, %s, %s, %s, %s, %s)""",
-            (mid, None, data.meal_date, data.meal_type.value, data.kcal_total, "manual"),
+            (mid, user_id, data.meal_date, data.meal_type.value, data.kcal_total, "manual"),
         )
     return {"meal_id": mid}
 

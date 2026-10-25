@@ -187,13 +187,15 @@ class TestDatabaseFunctions:
             kcal_total=300.5,
         )
 
-        result = await db_create_meal_from_manual(data)
+        result = await db_create_meal_from_manual(data, "user123")
 
         assert isinstance(result, dict)
         assert "meal_id" in result
         assert isinstance(result["meal_id"], str)
         assert len(result["meal_id"]) == 36
         conn.execute.assert_awaited_once()
+        params = conn.execute.call_args[0][1]
+        assert params[1] == "user123"  # meal is owned by the user
 
     # ------------------------------------------------------------------
     # db_create_meal_from_estimate
