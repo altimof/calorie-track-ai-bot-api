@@ -103,3 +103,25 @@ class TestLogsContract:
         assert response_time_ms < 200, (
             f"Response time was {response_time_ms:.2f}ms, expected < 200ms"
         )
+
+
+class TestLogsWithoutRegistration:
+    def test_post_logs_works_while_database_is_down(self, registered_user):
+        """Frontend reports of a DB outage must not be lost to the auth lookup."""
+        registered_user.side_effect = RuntimeError("pool exhausted")
+
+        response = client.post(
+            "/api/v1/logs", json={"level": "ERROR", "message": "API down"}, headers=HEADERS
+        )
+
+        assert response.status_code == 200
+        registered_user.assert_not_called()
+
+    def test_post_logs_accepts_unregistered_user(self, registered_user):
+        registered_user.return_value = None
+
+        response = client.post(
+            "/api/v1/logs", json={"level": "INFO", "message": "hello"}, headers=HEADERS
+        )
+
+        assert response.status_code == 200

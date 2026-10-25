@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Request
 
 from ...schemas import LogEntryCreate, LogLevel
 from ...utils.error_handling import handle_api_errors
-from .deps import get_telegram_user_id
+from .deps import get_verified_telegram_user_id
 
 router = APIRouter()
 
@@ -69,7 +69,9 @@ def _sanitize_context(context: dict[str, Any]) -> dict[str, Any]:
 @router.post("/logs", status_code=200)
 @handle_api_errors("create_log_entry")
 async def create_log_entry(
-    log_data: LogEntryCreate, request: Request, user_id: str = Depends(get_telegram_user_id)
+    log_data: LogEntryCreate,
+    request: Request,
+    user_id: str = Depends(get_verified_telegram_user_id),
 ) -> dict[str, str]:
     """Accept a frontend log entry and forward it to structlog."""
     sanitized_context = _sanitize_context(log_data.context) if log_data.context else {}
