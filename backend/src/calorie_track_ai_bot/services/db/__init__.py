@@ -7,9 +7,7 @@ from .inline_analytics import (
     db_upsert_inline_analytics,
 )
 from .meals import (
-    _enhance_meal_with_related_data as _enhance_meal_with_related_data,
-)
-from .meals import (
+    EstimateNotFoundError,
     db_create_meal_from_estimate,
     db_create_meal_from_manual,
     db_delete_meal,
@@ -19,6 +17,9 @@ from .meals import (
     db_get_meals_with_photos,
     db_update_meal,
     db_update_meal_with_macros,
+)
+from .meals import (
+    _enhance_meal_with_related_data as _enhance_meal_with_related_data,
 )
 from .photos import db_create_photo, db_get_photo, db_get_user_photo
 from .summaries import db_get_daily_summary, db_get_summaries_by_date_range, db_get_today_data
@@ -33,6 +34,7 @@ from .ui_config import (
 from .users import db_get_or_create_user, db_get_user
 
 __all__ = [
+    "EstimateNotFoundError",
     "db_cleanup_old_ui_configurations",
     "db_create_meal_from_estimate",
     "db_create_meal_from_manual",

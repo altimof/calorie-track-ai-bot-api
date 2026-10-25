@@ -14,6 +14,7 @@ from ...schemas import (
     MealWithPhotos,
 )
 from ...services.db import (
+    EstimateNotFoundError,
     db_create_meal_from_estimate,
     db_create_meal_from_manual,
     db_delete_meal,
@@ -38,7 +39,11 @@ async def create_meal(
     if isinstance(payload, MealCreateManualRequest):
         return await db_create_meal_from_manual(payload, user_id)
 
-    return await db_create_meal_from_estimate(payload, user_id)
+    try:
+        return await db_create_meal_from_estimate(payload, user_id)
+    except EstimateNotFoundError:
+        # Same response for other users' estimates, so estimate IDs can't be probed
+        raise HTTPException(status_code=404, detail="Estimate not found") from None
 
 
 @router.get("/meals", response_model=MealsListResponse)

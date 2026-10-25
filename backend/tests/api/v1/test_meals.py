@@ -145,6 +145,26 @@ class TestMealsEndpoints:
         assert response.status_code == 403
         mock_db_create.assert_not_called()
 
+    @patch("calorie_track_ai_bot.api.v1.meals.db_create_meal_from_estimate")
+    def test_create_meal_from_unknown_estimate_returns_404(
+        self, mock_db_create, client, auth_headers
+    ):
+        """Missing and other users' estimates are a 404, not a server error."""
+        from calorie_track_ai_bot.services.db import EstimateNotFoundError
+
+        mock_db_create.side_effect = EstimateNotFoundError("Estimate not found: x")
+
+        payload = {
+            "meal_date": "2024-01-01",
+            "meal_type": "lunch",
+            "estimate_id": "00000000-0000-0000-0000-000000000123",
+        }
+
+        response = client.post("/meals", json=payload, headers=auth_headers)
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Estimate not found"
+
     def test_create_meal_missing_required_fields(self, client):
         """Test meal creation with missing required fields."""
         # Missing meal_date
