@@ -73,13 +73,15 @@ async def db_get_user_estimate(estimate_id: str, user_id: str) -> dict[str, Any]
     pool = await database.get_pool()
 
     async with pool.connection() as conn:
+        # Look the estimate's photos up by primary key (photo_ids holds photo UUIDs as
+        # text); matching on user_id first would scan all of the user's photos.
         cur = await conn.execute(
             """SELECT e.* FROM estimates e
                WHERE e.id = %s
                  AND EXISTS (
                    SELECT 1 FROM photos p
-                   WHERE p.user_id = %s
-                     AND (p.id = e.photo_id OR p.id::text = ANY(e.photo_ids))
+                   WHERE p.id = ANY(array_append(e.photo_ids::uuid[], e.photo_id))
+                     AND p.user_id = %s
                  )""",
             (estimate_id, user_id),
         )

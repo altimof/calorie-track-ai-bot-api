@@ -21,6 +21,7 @@ from calorie_track_ai_bot.services.db import (
     db_delete_meal,
     db_fetch_inline_analytics,
     db_get_estimate,
+    db_get_user_estimate,
     db_increment_inline_permission_block,
     db_save_estimate,
     db_upsert_inline_analytics,
@@ -183,6 +184,28 @@ class TestDatabaseFunctions:
         result = await db_get_estimate("nonexistent")
 
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_db_get_user_estimate_checks_photo_owner_by_primary_key(self, mock_pool):
+        """Ownership is checked through the estimate's photo IDs, not a scan of the user's photos."""
+        _pool, conn, cursor = mock_pool
+        cursor.fetchone.return_value = {"id": "estimate123", "kcal_mean": 500}
+
+        result = await db_get_user_estimate("estimate123", "user123")
+
+        assert result == {"id": "estimate123", "kcal_mean": 500}
+        sql, params = conn.execute.call_args[0]
+        assert "p.id = ANY(array_append(e.photo_ids::uuid[], e.photo_id))" in sql
+        assert "p.user_id = %s" in sql
+        assert params == ("estimate123", "user123")
+
+    @pytest.mark.asyncio
+    async def test_db_get_user_estimate_not_owned(self, mock_pool):
+        """Returns None when no photo of the estimate belongs to the user."""
+        _pool, _conn, cursor = mock_pool
+        cursor.fetchone.return_value = None
+
+        assert await db_get_user_estimate("estimate123", "other-user") is None
 
     # ------------------------------------------------------------------
     # db_create_meal_from_manual
