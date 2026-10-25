@@ -127,6 +127,27 @@ class TestEstimatesEndpoints:
         mock_db_get.assert_not_called()
 
     @patch("calorie_track_ai_bot.api.v1.estimates.db_get_user_estimate")
+    def test_get_estimate_urn_id_is_canonicalized(self, mock_db_get, client):
+        """Forms uuid.UUID accepts but Postgres rejects reach SQL in canonical form."""
+        mock_db_get.return_value = None
+
+        response = client.get(f"/estimates/urn:uuid:{ESTIMATE_ID}")
+
+        assert response.status_code == 404
+        mock_db_get.assert_awaited_once_with(ESTIMATE_ID, USER_ID)
+
+    @patch("calorie_track_ai_bot.api.v1.estimates.enqueue_estimate_job")
+    def test_estimate_photo_urn_id_is_canonicalized(self, mock_enqueue, client, owned_photo):
+        """The photo lookup and the job get the canonical photo ID."""
+        mock_enqueue.return_value = "job123"
+
+        response = client.post(f"/photos/urn:uuid:{PHOTO_ID}/estimate")
+
+        assert response.status_code == 200
+        owned_photo.assert_awaited_once_with(PHOTO_ID, USER_ID)
+        mock_enqueue.assert_awaited_once_with(PHOTO_ID, source="api")
+
+    @patch("calorie_track_ai_bot.api.v1.estimates.db_get_user_estimate")
     def test_get_estimate_db_error(self, mock_db_get, client):
         """Test estimate retrieval when database operation fails."""
         mock_db_get.side_effect = Exception("Database Error")
