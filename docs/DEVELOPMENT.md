@@ -190,8 +190,8 @@ The bot only receives updates via webhook (there is no polling mode), so the bac
 # Start your backend first
 make dev-backend
 
-# In another terminal, register the webhook
-curl -X POST http://localhost:8000/bot/setup
+# In another terminal, register the webhook (needs ADMIN_API_TOKEN in backend/.env)
+curl -X POST -H "Authorization: Bearer $ADMIN_API_TOKEN" http://localhost:8000/bot/setup
 ```
 
 ### 3. Test Your Bot

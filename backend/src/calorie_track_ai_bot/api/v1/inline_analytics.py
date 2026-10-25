@@ -3,10 +3,11 @@ from __future__ import annotations
 from datetime import date, timedelta
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ...schemas import InlineChatType
 from ...services.db import db_fetch_inline_analytics
+from .admin_auth import require_admin_token
 
 router = APIRouter()
 
@@ -39,7 +40,7 @@ def _normalize_chat_type(value: str | None) -> InlineChatType | None:
         ) from exc
 
 
-@router.get("/analytics/inline-summary")
+@router.get("/analytics/inline-summary", dependencies=[Depends(require_admin_token)])
 async def get_inline_summary(
     range_start: str | None = Query(None),
     range_end: str | None = Query(None),

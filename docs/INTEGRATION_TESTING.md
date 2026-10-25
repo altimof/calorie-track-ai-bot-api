@@ -200,7 +200,7 @@ Use these manual and automated checks when validating inline mode end-to-end. Ea
 - [ ] **Private inline summary** — Select the inline result and verify the final message includes calories, macronutrients, confidence, and the privacy disclosure from the quickstart guide.
 - [ ] **Group reply mention** — Reply to a group photo with `@CalorieTrackAI_bot` and check that both the acknowledgement and result stay threaded via `reply_to_message_id`.
 - [ ] **Tagged caption flow** — Post a group photo tagging the bot in the caption; expect the bot to reply inline or DM a fallback with admin guidance if permissions block posting, incrementing `permission_block_count`.
-- [ ] **Analytics snapshot** — Query `/api/v1/analytics/inline-summary` and confirm the appropriate `trigger_counts` bucket increments for `inline_query`, `reply_mention`, or `tagged_photo`.
+- [ ] **Analytics snapshot** — Query `/api/v1/analytics/inline-summary` (with `Authorization: Bearer $ADMIN_API_TOKEN`) and confirm the appropriate `trigger_counts` bucket increments for `inline_query`, `reply_mention`, or `tagged_photo`.
 - [ ] **Telemetry verification** — Inspect structured logs/metrics to ensure `trigger_type`, acknowledgement latency, and result latency events were emitted for each exercised flow.
 
 ## Test Commands

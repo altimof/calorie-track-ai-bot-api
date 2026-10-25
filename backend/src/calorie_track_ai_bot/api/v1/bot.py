@@ -7,7 +7,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import httpx
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from ...schemas import InlineChatType, InlineTriggerType
@@ -23,6 +23,7 @@ from ...services.db import db_create_photo, db_get_or_create_user
 from ...services.inline_renderer import build_inline_placeholder
 from ...services.queue import InlineQueueThrottleError, enqueue_estimate_job, enqueue_inline_job
 from ...services.storage import tigris_presign_put
+from .admin_auth import require_admin_token
 
 router = APIRouter()
 
@@ -1059,7 +1060,7 @@ async def handle_text_message(message: TelegramMessage) -> None:
     logger.info(f"Text message processed: {text}")
 
 
-@router.post("/bot/setup")
+@router.post("/bot/setup", dependencies=[Depends(require_admin_token)])
 async def setup_webhook():
     """Setup Telegram webhook if configured."""
     if not TELEGRAM_BOT_TOKEN:
@@ -1084,7 +1085,7 @@ async def setup_webhook():
         raise HTTPException(status_code=500, detail=f"Error setting webhook: {e!s}") from e
 
 
-@router.get("/bot/webhook-info")
+@router.get("/bot/webhook-info", dependencies=[Depends(require_admin_token)])
 async def get_webhook_info():
     """Get current webhook information."""
     if not TELEGRAM_BOT_TOKEN:
@@ -1100,7 +1101,7 @@ async def get_webhook_info():
         raise HTTPException(status_code=500, detail=f"Error getting webhook info: {e!s}") from e
 
 
-@router.delete("/bot/webhook")
+@router.delete("/bot/webhook", dependencies=[Depends(require_admin_token)])
 async def delete_webhook():
     """Delete current webhook."""
     if not TELEGRAM_BOT_TOKEN:

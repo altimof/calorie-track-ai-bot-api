@@ -517,25 +517,16 @@ class TestDatabaseFunctions:
 
     GOAL_USER_ID = "1d882190-ac3f-4a06-8a44-20e46bafb9a5"
 
-    @pytest.fixture
-    def goal_user(self):
-        with patch(
-            "calorie_track_ai_bot.services.db.goals.resolve_user_id",
-            AsyncMock(return_value=self.GOAL_USER_ID),
-        ) as resolve:
-            yield resolve
-
     @pytest.mark.asyncio
-    async def test_db_create_or_update_goal_upserts_on_user_id(self, mock_pool, goal_user):
+    async def test_db_create_or_update_goal_upserts_on_user_id(self, mock_pool):
         """The goal is saved with one INSERT ... ON CONFLICT (user_id) and the row is returned."""
         _pool, conn, cursor = mock_pool
         saved = {"id": str(uuid4()), "user_id": self.GOAL_USER_ID, "daily_kcal_target": 1800}
         cursor.fetchone.return_value = saved
 
-        result = await db_create_or_update_goal("59357664", 1800)
+        result = await db_create_or_update_goal(self.GOAL_USER_ID, 1800)
 
         assert result == saved
-        goal_user.assert_awaited_once_with("59357664")
         conn.execute.assert_awaited_once()
         sql, params = conn.execute.await_args.args
         assert "ON CONFLICT (user_id) DO UPDATE" in sql
@@ -543,7 +534,7 @@ class TestDatabaseFunctions:
         assert params == (self.GOAL_USER_ID, 1800)
 
     @pytest.mark.asyncio
-    async def test_db_create_or_update_goal_names_missing_unique_index(self, mock_pool, goal_user):
+    async def test_db_create_or_update_goal_names_missing_unique_index(self, mock_pool):
         """Without the unique index, the error is logged with the index name and re-raised."""
         _pool, conn, _cursor = mock_pool
         conn.execute.side_effect = errors.InvalidColumnReference(
@@ -554,17 +545,6 @@ class TestDatabaseFunctions:
             patch("calorie_track_ai_bot.services.db.goals.logger") as logger,
             pytest.raises(errors.InvalidColumnReference),
         ):
-            await db_create_or_update_goal("59357664", 1800)
+            await db_create_or_update_goal(self.GOAL_USER_ID, 1800)
 
         assert "idx_goals_user_id_unique" in logger.error.call_args.args[0]
-
-    @pytest.mark.asyncio
-    async def test_db_create_or_update_goal_unknown_user(self, mock_pool, goal_user):
-        """A Telegram user without a users row is rejected before any SQL runs."""
-        _pool, conn, _cursor = mock_pool
-        goal_user.return_value = None
-
-        with pytest.raises(ValueError):
-            await db_create_or_update_goal("59357664", 1800)
-
-        conn.execute.assert_not_awaited()

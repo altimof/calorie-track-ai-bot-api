@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from ...schemas import DevelopmentEnvironment
 from ...services.config import APP_ENV
 from ...utils.error_handling import handle_api_errors
-from .deps import get_verified_telegram_user_id
+from .admin_auth import require_admin_token
 
 router = APIRouter()
 
@@ -36,10 +36,14 @@ def _check_dev_endpoints_access() -> bool:
     return True
 
 
-@router.get("/dev/environment", response_model=DevelopmentEnvironment)
+@router.get(
+    "/dev/environment",
+    response_model=DevelopmentEnvironment,
+    dependencies=[Depends(require_admin_token)],
+)
 @handle_api_errors("get_development_environment")
 async def get_development_environment(
-    request: Request, user_id: str = Depends(get_verified_telegram_user_id)
+    request: Request,
 ) -> DevelopmentEnvironment:
     """Get current development environment configuration."""
     correlation_id = request.state.correlation_id
@@ -80,11 +84,9 @@ async def get_development_environment(
     )
 
 
-@router.get("/dev/db/status")
+@router.get("/dev/db/status", dependencies=[Depends(require_admin_token)])
 @handle_api_errors("get_db_status")
-async def get_db_status(
-    request: Request, user_id: str = Depends(get_verified_telegram_user_id)
-) -> dict:
+async def get_db_status(request: Request) -> dict:
     """Get database connection pool status."""
     correlation_id = request.state.correlation_id
 

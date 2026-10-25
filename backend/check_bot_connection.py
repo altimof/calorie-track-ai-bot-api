@@ -2,9 +2,11 @@
 """
 Script to check Telegram bot connection status.
 Run this after deploying your app to verify everything is working.
+The webhook check needs the app's admin token in the ADMIN_API_TOKEN env var.
 """
 
 import asyncio
+import os
 import sys
 
 import httpx
@@ -34,8 +36,15 @@ async def check_bot_connection(app_url: str, bot_token: str | None = None) -> No
     print("2. Checking webhook status...")
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"{app_url}/bot/webhook-info")
-            if response.status_code == 200:
+            admin_token = os.getenv("ADMIN_API_TOKEN")
+            headers = {"Authorization": f"Bearer {admin_token}"} if admin_token else {}
+            response = await client.get(f"{app_url}/bot/webhook-info", headers=headers)
+            if response.status_code in (401, 404):
+                print(
+                    "   ⚠️  Skipped: set ADMIN_API_TOKEN to the app's admin token "
+                    "(the route is disabled when the app has none)"
+                )
+            elif response.status_code == 200:
                 data = response.json()
                 webhook_info = data.get("webhook_info", {})
 

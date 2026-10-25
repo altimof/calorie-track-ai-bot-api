@@ -14,7 +14,7 @@ def client() -> TestClient:
     return TestClient(app)
 
 
-def test_get_inline_summary(client: TestClient) -> None:
+def test_get_inline_summary(client: TestClient, admin_headers: dict[str, str]) -> None:
     sample = InlineAnalyticsDaily(
         id=uuid4(),
         date=date(2025, 1, 1),
@@ -38,6 +38,7 @@ def test_get_inline_summary(client: TestClient) -> None:
         response = client.get(
             "/api/v1/analytics/inline-summary",
             params={"range_start": "2025-01-01", "range_end": "2025-01-07", "chat_type": "group"},
+            headers=admin_headers,
         )
 
     assert response.status_code == 200

@@ -195,6 +195,22 @@ def mock_s3_client():
         yield mock_s3
 
 
+ADMIN_TOKEN = "test-admin-token"
+
+
+@pytest.fixture
+def admin_headers():
+    """Configure ADMIN_API_TOKEN and return headers that pass the admin check.
+
+    Some tests import the app as `src.calorie_track_ai_bot`, so both module names are patched.
+    """
+    with (
+        patch("calorie_track_ai_bot.services.config.ADMIN_API_TOKEN", ADMIN_TOKEN),
+        patch("src.calorie_track_ai_bot.services.config.ADMIN_API_TOKEN", ADMIN_TOKEN),
+    ):
+        yield {"Authorization": f"Bearer {ADMIN_TOKEN}"}
+
+
 @pytest.fixture
 def mock_telegram_bot():
     """Mock Telegram bot for testing."""

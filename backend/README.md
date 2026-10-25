@@ -83,9 +83,11 @@ make check
 
 ### Telegram Bot Endpoints
 - `POST /bot` → Telegram webhook handler (receives messages from Telegram)
-- `POST /bot/setup` → Setup Telegram webhook
-- `GET /bot/webhook-info` → Get current webhook information
-- `DELETE /bot/webhook` → Delete current webhook
+- `POST /bot/setup` → Setup Telegram webhook (admin)
+- `GET /bot/webhook-info` → Get current webhook information (admin)
+- `DELETE /bot/webhook` → Delete current webhook (admin)
+
+Routes marked *admin*, plus `GET /api/v1/analytics/inline-summary` and `/api/v1/dev/*`, require `Authorization: Bearer <ADMIN_API_TOKEN>`. Without `ADMIN_API_TOKEN` set they are disabled (404).
 
 OpenAPI JSON: `GET /openapi.json` (interactive docs at `/docs`).
 Export the spec to `frontend/openapi.json` with `make openapi-export`.
@@ -147,6 +149,7 @@ The application requires the following environment variables:
 - `WEBHOOK_URL`: Telegram webhook URL (set in `fly.toml` for production)
 - `USE_WEBHOOK`: Set webhook automatically on startup (true/false, default false)
 - `TELEGRAM_WEBHOOK_SECRET`: Secret registered with the webhook on startup; `POST /bot` then rejects updates that don't carry it (403). 1-256 chars of `A-Z a-z 0-9 _ -`, e.g. `fly secrets set TELEGRAM_WEBHOOK_SECRET=$(openssl rand -hex 32)`. Unset: updates are not verified
+- `ADMIN_API_TOKEN`: Bearer token for the admin routes (webhook management, inline analytics, `/api/v1/dev/*`), e.g. `fly secrets set ADMIN_API_TOKEN=$(openssl rand -hex 32)`. Unset: those routes are disabled (404)
 - `ENABLE_WORKER`: Run the estimate worker inside the API process (true/false, default false; `true` in `fly.toml`)
 - `CORS_ORIGINS`, `TRUSTED_HOSTS`: Comma-separated overrides for the defaults in `services/config.py`
 - `INLINE_MODE_ENABLED`, `INLINE_HASH_SALT`: Telegram inline mode settings
@@ -227,16 +230,16 @@ flyctl deploy
 3. Send a photo of food to test calorie estimation
 
 ### 5. Manual Webhook Management (Optional)
-If you need to manually manage the webhook:
+If you need to manually manage the webhook (requires `ADMIN_API_TOKEN` on the app):
 ```bash
 # Check webhook status
-curl https://your-app.fly.dev/bot/webhook-info
+curl -H "Authorization: Bearer $ADMIN_API_TOKEN" https://your-app.fly.dev/bot/webhook-info
 
 # Manually setup webhook (usually not needed)
-curl -X POST https://your-app.fly.dev/bot/setup
+curl -X POST -H "Authorization: Bearer $ADMIN_API_TOKEN" https://your-app.fly.dev/bot/setup
 
 # Delete webhook
-curl -X DELETE https://your-app.fly.dev/bot/webhook
+curl -X DELETE -H "Authorization: Bearer $ADMIN_API_TOKEN" https://your-app.fly.dev/bot/webhook
 ```
 
 ### GitHub Actions
