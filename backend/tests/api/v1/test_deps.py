@@ -11,7 +11,7 @@ import pytest
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
-from calorie_track_ai_bot.api.v1.deps import get_telegram_user_id
+from calorie_track_ai_bot.api.v1.deps import get_telegram_user_id, get_verified_telegram_user_id
 from calorie_track_ai_bot.services import config
 
 BOT_TOKEN = "123456:TEST-TOKEN"
@@ -21,6 +21,11 @@ app = FastAPI()
 
 @app.get("/whoami")
 async def whoami(telegram_user_id: str = Depends(get_telegram_user_id)):
+    return {"telegram_user_id": telegram_user_id}
+
+
+@app.get("/whoami-verified")
+async def whoami_verified(telegram_user_id: str = Depends(get_verified_telegram_user_id)):
     return {"telegram_user_id": telegram_user_id}
 
 
@@ -125,6 +130,31 @@ class TestRegisteredUsersOnly:
         registered_user.return_value = None
         response = client.get("/whoami", headers={"x-user-id": "59357664"})
         assert response.status_code == 403
+
+
+@pytest.mark.usefixtures("secure")
+class TestVerifiedWithoutRegistration:
+    def test_unregistered_user_is_accepted_without_lookup(self, registered_user):
+        response = client.get(
+            "/whoami-verified", headers={"authorization": f"tma {signed_init_data()}"}
+        )
+        assert response.status_code == 200
+        assert response.json() == {"telegram_user_id": "59357664"}
+        registered_user.assert_not_called()
+
+    def test_works_while_database_is_down(self, registered_user):
+        registered_user.side_effect = RuntimeError("pool exhausted")
+        response = client.get(
+            "/whoami-verified", headers={"authorization": f"tma {signed_init_data()}"}
+        )
+        assert response.status_code == 200
+
+    def test_invalid_init_data_still_rejected(self):
+        response = client.get(
+            "/whoami-verified",
+            headers={"authorization": f"tma {signed_init_data(bot_token='999:OTHER')}"},
+        )
+        assert response.status_code == 401
 
 
 class TestResolveUserIdLookupOnly:

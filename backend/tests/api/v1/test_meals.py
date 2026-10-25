@@ -20,8 +20,16 @@ class TestMealsEndpoints:
         app.include_router(router)
         return TestClient(app)
 
+    @pytest.fixture
+    def auth_headers(self):
+        """Headers of a registered user; resolve_user_id maps them to user-uuid-123."""
+        with patch(
+            "calorie_track_ai_bot.api.v1.deps.resolve_user_id", return_value="user-uuid-123"
+        ):
+            yield {"x-user-id": "123456789"}
+
     @patch("calorie_track_ai_bot.api.v1.meals.db_create_meal_from_manual")
-    def test_create_meal_manual_success(self, mock_db_create, client):
+    def test_create_meal_manual_success(self, mock_db_create, client, auth_headers):
         """Test successful manual meal creation."""
         mock_db_create.return_value = {"meal_id": "00000000-0000-0000-0000-000000000001"}
 
@@ -32,7 +40,7 @@ class TestMealsEndpoints:
             "macros": {"protein": 20, "carbs": 30, "fats": 10},
         }
 
-        response = client.post("/meals", json=payload)
+        response = client.post("/meals", json=payload, headers=auth_headers)
 
         assert response.status_code == 200
         data = response.json()
@@ -65,7 +73,7 @@ class TestMealsEndpoints:
         assert data["meal_id"] == "00000000-0000-0000-0000-000000000002"
 
     @patch("calorie_track_ai_bot.api.v1.meals.db_create_meal_from_manual")
-    def test_create_meal_manual_without_macros(self, mock_db_create, client):
+    def test_create_meal_manual_without_macros(self, mock_db_create, client, auth_headers):
         """Test manual meal creation without macros."""
         mock_db_create.return_value = {"meal_id": "00000000-0000-0000-0000-000000000003"}
 
@@ -76,7 +84,7 @@ class TestMealsEndpoints:
             # No macros field
         }
 
-        response = client.post("/meals", json=payload)
+        response = client.post("/meals", json=payload, headers=auth_headers)
 
         assert response.status_code == 200
         data = response.json()
@@ -103,6 +111,39 @@ class TestMealsEndpoints:
         assert response.status_code == 200
         data = response.json()
         assert data["meal_id"] == "00000000-0000-0000-0000-000000000004"
+
+    @patch("calorie_track_ai_bot.api.v1.meals.db_create_meal_from_manual")
+    def test_create_meal_manual_passes_user(self, mock_db_create, client, auth_headers):
+        """A manual meal is created for the authenticated user."""
+        mock_db_create.return_value = {"meal_id": "00000000-0000-0000-0000-000000000001"}
+
+        payload = {"meal_date": "2024-01-01", "meal_type": "breakfast", "kcal_total": 300.5}
+
+        response = client.post("/meals", json=payload, headers=auth_headers)
+
+        assert response.status_code == 200
+        assert mock_db_create.call_args[0][1] == "user-uuid-123"
+
+    @patch("calorie_track_ai_bot.api.v1.meals.db_create_meal_from_manual")
+    def test_create_meal_manual_requires_auth(self, mock_db_create, client):
+        """Anonymous clients cannot create manual meals."""
+        payload = {"meal_date": "2024-01-01", "meal_type": "breakfast", "kcal_total": 300.5}
+
+        response = client.post("/meals", json=payload)
+
+        assert response.status_code == 401
+        mock_db_create.assert_not_called()
+
+    @patch("calorie_track_ai_bot.api.v1.deps.resolve_user_id", return_value=None)
+    @patch("calorie_track_ai_bot.api.v1.meals.db_create_meal_from_manual")
+    def test_create_meal_manual_unregistered_user(self, mock_db_create, _mock_resolve, client):
+        """Users not registered through the bot cannot create manual meals."""
+        payload = {"meal_date": "2024-01-01", "meal_type": "breakfast", "kcal_total": 300.5}
+
+        response = client.post("/meals", json=payload, headers={"x-user-id": "123456789"})
+
+        assert response.status_code == 403
+        mock_db_create.assert_not_called()
 
     def test_create_meal_missing_required_fields(self, client):
         """Test meal creation with missing required fields."""
@@ -136,13 +177,13 @@ class TestMealsEndpoints:
         assert response.status_code == 422
 
     @patch("calorie_track_ai_bot.api.v1.meals.db_create_meal_from_manual")
-    def test_create_meal_manual_db_error(self, mock_db_create, client):
+    def test_create_meal_manual_db_error(self, mock_db_create, client, auth_headers):
         """Test manual meal creation when database operation fails."""
         mock_db_create.side_effect = Exception("Database Error")
 
         payload = {"meal_date": "2024-01-01", "meal_type": "breakfast", "kcal_total": 300.5}
 
-        response = client.post("/meals", json=payload)
+        response = client.post("/meals", json=payload, headers=auth_headers)
         assert response.status_code == 500
 
     @patch("calorie_track_ai_bot.api.v1.deps.resolve_user_id")
@@ -176,23 +217,23 @@ class TestMealsEndpoints:
         assert delete_response.status_code == 405
 
     @patch("calorie_track_ai_bot.api.v1.meals.db_create_meal_from_manual")
-    def test_create_meal_content_type(self, mock_db_create, client):
+    def test_create_meal_content_type(self, mock_db_create, client, auth_headers):
         """Test that create meal returns JSON content type."""
         mock_db_create.return_value = {"meal_id": "00000000-0000-0000-0000-000000000001"}
 
         payload = {"meal_date": "2024-01-01", "meal_type": "breakfast", "kcal_total": 300.5}
 
-        response = client.post("/meals", json=payload)
+        response = client.post("/meals", json=payload, headers=auth_headers)
         assert response.headers["content-type"] == "application/json"
 
     @patch("calorie_track_ai_bot.api.v1.meals.db_create_meal_from_manual")
-    def test_create_meal_response_structure(self, mock_db_create, client):
+    def test_create_meal_response_structure(self, mock_db_create, client, auth_headers):
         """Test that create meal returns consistent response structure."""
         mock_db_create.return_value = {"meal_id": "00000000-0000-0000-0000-000000000001"}
 
         payload = {"meal_date": "2024-01-01", "meal_type": "breakfast", "kcal_total": 300.5}
 
-        response = client.post("/meals", json=payload)
+        response = client.post("/meals", json=payload, headers=auth_headers)
         data = response.json()
 
         # Should be valid JSON
@@ -205,7 +246,7 @@ class TestMealsEndpoints:
         assert isinstance(data["meal_id"], str)
 
     @patch("calorie_track_ai_bot.api.v1.meals.db_create_meal_from_manual")
-    def test_create_meal_meal_types(self, mock_db_create, client):
+    def test_create_meal_meal_types(self, mock_db_create, client, auth_headers):
         """Test meal creation with different meal types."""
         mock_db_create.return_value = {"meal_id": "00000000-0000-0000-0000-000000000001"}
 
@@ -214,11 +255,11 @@ class TestMealsEndpoints:
         for meal_type in meal_types:
             payload = {"meal_date": "2024-01-01", "meal_type": meal_type, "kcal_total": 300.5}
 
-            response = client.post("/meals", json=payload)
+            response = client.post("/meals", json=payload, headers=auth_headers)
             assert response.status_code == 200
 
     @patch("calorie_track_ai_bot.api.v1.meals.db_create_meal_from_manual")
-    def test_create_meal_date_formats(self, mock_db_create, client):
+    def test_create_meal_date_formats(self, mock_db_create, client, auth_headers):
         """Test meal creation with different date formats."""
         mock_db_create.return_value = {"meal_id": "00000000-0000-0000-0000-000000000001"}
 
@@ -227,5 +268,5 @@ class TestMealsEndpoints:
         for meal_date in date_formats:
             payload = {"meal_date": meal_date, "meal_type": "breakfast", "kcal_total": 300.5}
 
-            response = client.post("/meals", json=payload)
+            response = client.post("/meals", json=payload, headers=auth_headers)
             assert response.status_code == 200

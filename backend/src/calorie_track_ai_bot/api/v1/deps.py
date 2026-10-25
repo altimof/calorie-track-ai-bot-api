@@ -53,6 +53,16 @@ async def _authenticate(request: Request) -> tuple[str, str]:
     return telegram_user_id, internal_user_id
 
 
+def get_verified_telegram_user_id(request: Request) -> str:
+    """Return the telegram user ID from verified initData, without the registered-user check.
+
+    For routes that read no user data from the database (logs, theme and language
+    detection, dev diagnostics): they need no DB lookup, so they keep working while
+    the database is down, and they accept users who have not started the bot yet.
+    """
+    return _identify_telegram_user(request)
+
+
 async def get_telegram_user_id(request: Request) -> str:
     """Return the telegram user ID of the registered user making the request.
 

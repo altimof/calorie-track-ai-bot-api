@@ -24,7 +24,7 @@ from ...services.db import (
     db_update_ui_configuration,
 )
 from ...utils.error_handling import handle_api_errors
-from .deps import get_telegram_user_id
+from .deps import get_telegram_user_id, get_verified_telegram_user_id
 
 router = APIRouter()
 
@@ -242,7 +242,7 @@ async def patch_ui_configuration(
 @router.get("/config/theme", response_model=ThemeDetectionResponse)
 @handle_api_errors("detect_theme")
 async def detect_theme(
-    request: Request, user_id: str = Depends(get_telegram_user_id)
+    request: Request, user_id: str = Depends(get_verified_telegram_user_id)
 ) -> ThemeDetectionResponse:
     """Detect and return current theme settings based on context."""
     telegram_color_scheme = request.headers.get("x-telegram-color-scheme")
@@ -277,7 +277,7 @@ async def detect_theme(
 @router.get("/config/language", response_model=LanguageDetectionResponse)
 @handle_api_errors("detect_language")
 async def detect_language(
-    request: Request, user_id: str = Depends(get_telegram_user_id)
+    request: Request, user_id: str = Depends(get_verified_telegram_user_id)
 ) -> LanguageDetectionResponse:
     """Detect and return current language settings based on context."""
     telegram_language_code = request.headers.get("x-telegram-language-code")

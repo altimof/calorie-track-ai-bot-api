@@ -23,6 +23,7 @@ from calorie_track_ai_bot.services.db import (
     db_delete_meal,
     db_fetch_inline_analytics,
     db_get_estimate,
+    db_get_user_estimate,
     db_increment_inline_permission_block,
     db_save_estimate,
     db_upsert_inline_analytics,
@@ -147,6 +148,18 @@ class TestDatabaseFunctions:
         assert len(result) == 36
         conn.execute.assert_awaited_once()
 
+    @pytest.mark.asyncio
+    async def test_db_save_estimate_uses_given_id(self, mock_pool):
+        """db_save_estimate saves under the ID assigned at enqueue when one is given."""
+        _pool, conn, _cursor = mock_pool
+
+        estimate_id = "00000000-0000-0000-0000-000000000abc"
+        result = await db_save_estimate("photo123", {"kcal_mean": 500}, estimate_id=estimate_id)
+
+        assert result == estimate_id
+        params = conn.execute.call_args[0][1]
+        assert params[0] == estimate_id
+
     # ------------------------------------------------------------------
     # db_get_estimate
     # ------------------------------------------------------------------
@@ -174,6 +187,28 @@ class TestDatabaseFunctions:
 
         assert result is None
 
+    @pytest.mark.asyncio
+    async def test_db_get_user_estimate_checks_photo_owner_by_primary_key(self, mock_pool):
+        """Ownership is checked through the estimate's photo IDs, not a scan of the user's photos."""
+        _pool, conn, cursor = mock_pool
+        cursor.fetchone.return_value = {"id": "estimate123", "kcal_mean": 500}
+
+        result = await db_get_user_estimate("estimate123", "user123")
+
+        assert result == {"id": "estimate123", "kcal_mean": 500}
+        sql, params = conn.execute.call_args[0]
+        assert "p.id = ANY(array_append(e.photo_ids::uuid[], e.photo_id))" in sql
+        assert "p.user_id = %s" in sql
+        assert params == ("estimate123", "user123")
+
+    @pytest.mark.asyncio
+    async def test_db_get_user_estimate_not_owned(self, mock_pool):
+        """Returns None when no photo of the estimate belongs to the user."""
+        _pool, _conn, cursor = mock_pool
+        cursor.fetchone.return_value = None
+
+        assert await db_get_user_estimate("estimate123", "other-user") is None
+
     # ------------------------------------------------------------------
     # db_create_meal_from_manual
     # ------------------------------------------------------------------
@@ -189,13 +224,15 @@ class TestDatabaseFunctions:
             kcal_total=300.5,
         )
 
-        result = await db_create_meal_from_manual(data)
+        result = await db_create_meal_from_manual(data, "user123")
 
         assert isinstance(result, dict)
         assert "meal_id" in result
         assert isinstance(result["meal_id"], str)
         assert len(result["meal_id"]) == 36
         conn.execute.assert_awaited_once()
+        params = conn.execute.call_args[0][1]
+        assert params[1] == "user123"  # meal is owned by the user
 
     # ------------------------------------------------------------------
     # db_create_meal_from_estimate
@@ -209,7 +246,7 @@ class TestDatabaseFunctions:
         mock_estimate = {"kcal_mean": 400, "kcal_min": 350, "kcal_max": 450}
 
         with patch(
-            "calorie_track_ai_bot.services.db.meals.db_get_estimate",
+            "calorie_track_ai_bot.services.db.meals.db_get_user_estimate",
             return_value=mock_estimate,
         ):
             data = MealCreateFromEstimateRequest(
@@ -240,7 +277,7 @@ class TestDatabaseFunctions:
         mock_estimate = {"kcal_mean": 600, "kcal_min": 550, "kcal_max": 650}
 
         with patch(
-            "calorie_track_ai_bot.services.db.meals.db_get_estimate",
+            "calorie_track_ai_bot.services.db.meals.db_get_user_estimate",
             return_value=mock_estimate,
         ):
             data = MealCreateFromEstimateRequest(
@@ -261,11 +298,11 @@ class TestDatabaseFunctions:
 
     @pytest.mark.asyncio
     async def test_db_create_meal_from_estimate_not_found(self, mock_pool):
-        """Raises ValueError when the estimate does not exist."""
+        """Raises ValueError when the estimate does not exist or is not the user's."""
         _pool, _conn, _cursor = mock_pool
 
         with patch(
-            "calorie_track_ai_bot.services.db.meals.db_get_estimate",
+            "calorie_track_ai_bot.services.db.meals.db_get_user_estimate",
             return_value=None,
         ):
             data = MealCreateFromEstimateRequest(
@@ -277,6 +314,33 @@ class TestDatabaseFunctions:
 
             with pytest.raises(ValueError, match="Estimate not found"):
                 await db_create_meal_from_estimate(data, "user123")
+
+    @pytest.mark.asyncio
+    async def test_db_create_meal_from_estimate_scoped_to_user(self, mock_pool):
+        """The estimate is looked up for the user, and only the user's photos are re-linked."""
+        _pool, conn, _cursor = mock_pool
+
+        mock_estimate = {"kcal_mean": 500, "photo_ids": ["photo-1", "photo-2"]}
+
+        with patch(
+            "calorie_track_ai_bot.services.db.meals.db_get_user_estimate",
+            return_value=mock_estimate,
+        ) as mock_get:
+            data = MealCreateFromEstimateRequest(
+                meal_date=date(2024, 1, 1),
+                meal_type=MealType.lunch,
+                estimate_id="00000000-0000-0000-0000-000000000123",
+            )
+
+            await db_create_meal_from_estimate(data, "user123")
+
+        mock_get.assert_awaited_once_with("00000000-0000-0000-0000-000000000123", "user123")
+        photo_updates = conn.execute.call_args_list[1:]
+        assert len(photo_updates) == 2
+        for call, photo_id in zip(photo_updates, ["photo-1", "photo-2"], strict=True):
+            sql, params = call[0]
+            assert "AND user_id = %s" in sql
+            assert params[2:] == (photo_id, "user123")
 
     # ------------------------------------------------------------------
     # db_delete_meal

@@ -13,12 +13,12 @@ from ...schemas import (
 from .. import database
 from ..config import logger
 from ..storage import BUCKET_NAME, s3
-from ._base import LOCAL_MEAL_DATE_SQL, resolve_user_id
-from .estimates import db_get_estimate
+from ._base import LOCAL_MEAL_DATE_SQL
+from .estimates import db_get_estimate, db_get_user_estimate
 from .photos import db_get_photo
 
 
-async def db_create_meal_from_manual(data: MealCreateManualRequest) -> dict[str, str]:
+async def db_create_meal_from_manual(data: MealCreateManualRequest, user_id: str) -> dict[str, str]:
     pool = await database.get_pool()
 
     mid = str(uuid.uuid4())
@@ -26,7 +26,7 @@ async def db_create_meal_from_manual(data: MealCreateManualRequest) -> dict[str,
         await conn.execute(
             """INSERT INTO meals (id, user_id, meal_date, meal_type, kcal_total, source)
                VALUES (%s, %s, %s, %s, %s, %s)""",
-            (mid, None, data.meal_date, data.meal_type.value, data.kcal_total, "manual"),
+            (mid, user_id, data.meal_date, data.meal_type.value, data.kcal_total, "manual"),
         )
     return {"meal_id": mid}
 
@@ -38,8 +38,8 @@ async def db_create_meal_from_estimate(
 
     mid = str(uuid.uuid4())
 
-    # Get the estimate data to retrieve kcal_mean
-    estimate = await db_get_estimate(str(data.estimate_id))
+    # Get the estimate data to retrieve kcal_mean; only the owner of its photos may use it
+    estimate = await db_get_user_estimate(str(data.estimate_id), user_id)
     if not estimate:
         raise ValueError(f"Estimate not found: {data.estimate_id}")
 
@@ -88,8 +88,8 @@ async def db_create_meal_from_estimate(
 
         for i, photo_id in enumerate(photo_ids[:5]):
             await conn.execute(
-                "UPDATE photos SET meal_id = %s, display_order = %s WHERE id = %s",
-                (mid, i, photo_id),
+                "UPDATE photos SET meal_id = %s, display_order = %s WHERE id = %s AND user_id = %s",
+                (mid, i, photo_id, user_id),
             )
 
         if photo_ids:
@@ -179,31 +179,6 @@ async def _enhance_meal_with_related_data(meal: dict[str, Any]) -> None:
     meal["description"] = _generate_meal_description(estimate)
     meal["corrected"] = False
     _ensure_updated_at(meal)
-
-
-async def db_get_meals_by_date(
-    meal_date: str, telegram_user_id: str | None = None
-) -> list[dict[str, Any]]:
-    """Get meals for a specific date with related data."""
-    pool = await database.get_pool()
-
-    user_id = await resolve_user_id(telegram_user_id)
-
-    async with pool.connection() as conn:
-        if user_id:
-            cur = await conn.execute(
-                "SELECT * FROM meals WHERE meal_date = %s AND user_id = %s",
-                (meal_date, user_id),
-            )
-        else:
-            cur = await conn.execute("SELECT * FROM meals WHERE meal_date = %s", (meal_date,))
-        rows = await cur.fetchall()
-        meals = [dict(r) for r in rows]
-
-    for meal in meals:
-        await _enhance_meal_with_related_data(meal)
-
-    return meals
 
 
 async def db_get_meal(meal_id: str) -> dict[str, Any] | None:

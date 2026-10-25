@@ -7,6 +7,10 @@ from fastapi.testclient import TestClient
 
 from calorie_track_ai_bot.api.v1.goals import router
 
+# Internal user ID the autouse registered_user fixture (conftest) resolves every
+# Telegram user to; routes pass it, not the Telegram ID, to the DB layer.
+INTERNAL_USER_ID = "550e8400-e29b-41d4-a716-446655440000"
+
 
 class TestGoalsEndpoints:
     """Test goal-related endpoints with user ID detection."""
@@ -44,7 +48,7 @@ class TestGoalsEndpoints:
         assert data == mock_goal_data
 
         # Verify that db_get_goal was called with the correct user ID
-        mock_db_get_goal.assert_called_once_with("59357664")
+        mock_db_get_goal.assert_called_once_with(INTERNAL_USER_ID)
 
     def test_get_goal_without_user_id_header(self, client):
         """Test getting goal without x-user-id header returns 401."""
@@ -70,7 +74,7 @@ class TestGoalsEndpoints:
         assert response.status_code == 200
         assert response.json() is None
 
-        mock_db_get_goal.assert_called_once_with("59357664")
+        mock_db_get_goal.assert_called_once_with(INTERNAL_USER_ID)
 
     @patch("calorie_track_ai_bot.api.v1.goals.db_get_goal")
     def test_get_goal_database_error(self, mock_db_get_goal, client):
@@ -107,7 +111,7 @@ class TestGoalsEndpoints:
         assert data == mock_goal_data
 
         # Verify that db_create_or_update_goal was called with the correct user ID
-        mock_db_create_goal.assert_called_once_with("59357664", 2000)
+        mock_db_create_goal.assert_called_once_with(INTERNAL_USER_ID, 2000)
 
     def test_create_goal_without_user_id_header(self, client):
         """Test creating goal without x-user-id header returns 401."""
@@ -153,7 +157,7 @@ class TestGoalsEndpoints:
         assert data == mock_goal_data
 
         # Verify that db_create_or_update_goal was called with the correct user ID
-        mock_db_create_goal.assert_called_once_with("59357664", 2500)
+        mock_db_create_goal.assert_called_once_with(INTERNAL_USER_ID, 2500)
 
     def test_update_goal_without_user_id_header(self, client):
         """Test updating goal without x-user-id header returns 401."""
@@ -241,10 +245,10 @@ class TestGoalsEndpoints:
             response = client.get("/goals", headers=headers)
 
             assert response.status_code == 200
-            # Should use the user ID since FastAPI is case-insensitive
-            mock_db_get_goal.assert_called_once_with("59357664")
+            # FastAPI headers are case-insensitive; the DB gets the internal ID
+            mock_db_get_goal.assert_called_once_with(INTERNAL_USER_ID)
 
-    def test_multiple_user_id_headers(self, client):
+    def test_multiple_user_id_headers(self, client, registered_user):
         """Test behavior with multiple x-user-id headers (HTTP spec behavior)."""
         with patch("calorie_track_ai_bot.api.v1.goals.db_get_goal") as mock_db_get_goal:
             mock_db_get_goal.return_value = None
@@ -255,10 +259,11 @@ class TestGoalsEndpoints:
             response = client.get("/goals", headers=headers)
 
             assert response.status_code == 200
-            # Should use the full comma-separated value
-            mock_db_get_goal.assert_called_once_with("59357664,99999999")
+            # The full comma-separated value is looked up; the DB gets the internal ID
+            mock_db_get_goal.assert_called_once_with(INTERNAL_USER_ID)
+            registered_user.assert_awaited_once_with("59357664,99999999")
 
-    def test_user_id_with_whitespace(self, client):
+    def test_user_id_with_whitespace(self, client, registered_user):
         """Test user ID with leading/trailing whitespace."""
         with patch("calorie_track_ai_bot.api.v1.goals.db_get_goal") as mock_db_get_goal:
             mock_db_get_goal.return_value = None
@@ -267,10 +272,11 @@ class TestGoalsEndpoints:
             response = client.get("/goals", headers=headers)
 
             assert response.status_code == 200
-            # Should use the user ID as-is (including whitespace)
-            mock_db_get_goal.assert_called_once_with("  59357664  ")
+            # The header is looked up as-is (including whitespace); the DB gets the internal ID
+            mock_db_get_goal.assert_called_once_with(INTERNAL_USER_ID)
+            registered_user.assert_awaited_once_with("  59357664  ")
 
-    def test_user_id_with_special_characters(self, client):
+    def test_user_id_with_special_characters(self, client, registered_user):
         """Test user ID with special characters."""
         with patch("calorie_track_ai_bot.api.v1.goals.db_get_goal") as mock_db_get_goal:
             mock_db_get_goal.return_value = None
@@ -279,5 +285,6 @@ class TestGoalsEndpoints:
             response = client.get("/goals", headers=headers)
 
             assert response.status_code == 200
-            # Should use the user ID as-is
-            mock_db_get_goal.assert_called_once_with("user@domain.com")
+            # The header is looked up as-is; the DB gets the internal ID
+            mock_db_get_goal.assert_called_once_with(INTERNAL_USER_ID)
+            registered_user.assert_awaited_once_with("user@domain.com")

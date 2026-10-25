@@ -10,20 +10,13 @@ from fastapi import APIRouter, HTTPException, Request
 from ...schemas import ConnectionStatus, ConnectivityResponse
 from ...services.config import APP_ENV
 from ...utils.error_handling import handle_api_errors
+from ...utils.ids import parse_uuid
 
 router = APIRouter()
 
 logger = structlog.get_logger(__name__)
 
 API_VERSION = "1.0.0"
-
-
-def _is_valid_uuid(uuid_string: str) -> bool:
-    try:
-        uuid.UUID(uuid_string)
-        return True
-    except (ValueError, TypeError):
-        return False
 
 
 async def _perform_health_checks() -> tuple[bool, dict]:
@@ -58,9 +51,7 @@ async def get_connectivity_status(request: Request) -> ConnectivityResponse:
     start_time = time.perf_counter()
 
     correlation_id_str = getattr(request.state, "correlation_id", str(uuid.uuid4()))
-    correlation_id = (
-        uuid.UUID(correlation_id_str) if _is_valid_uuid(correlation_id_str) else uuid.uuid4()
-    )
+    correlation_id = parse_uuid(correlation_id_str) or uuid.uuid4()
 
     is_healthy, check_details = await _perform_health_checks()
 

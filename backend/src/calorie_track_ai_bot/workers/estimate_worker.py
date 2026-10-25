@@ -96,6 +96,9 @@ async def handle_job(job: dict[str, Any]) -> None:
     photo_id = job.get("photo_id")  # Legacy single-photo format
     description = job.get("description")  # Optional user description
     media_group_id = job.get("media_group_id")  # Telegram media group
+    estimate_id = job.get("estimate_id")  # Pre-assigned at enqueue; absent in older jobs
+    # API clients log the meal themselves; only bot jobs get a meal and a Telegram reply
+    deliver = job.get("source", "bot") != "api"
 
     # Start typing indicator while processing
     stop_typing = asyncio.Event()
@@ -107,11 +110,13 @@ async def handle_job(job: dict[str, Any]) -> None:
         if photo_ids:
             # Multi-photo job
             logger.info(f"Processing multi-photo estimation job: {len(photo_ids)} photos")
-            await handle_multiphotos_job(photo_ids, description, media_group_id)
+            await handle_multiphotos_job(
+                photo_ids, description, media_group_id, estimate_id, deliver=deliver
+            )
         elif photo_id:
             # Legacy single-photo job
             logger.info(f"Processing single-photo estimation job for photo_id: {photo_id}")
-            await handle_single_photo_job(photo_id)
+            await handle_single_photo_job(photo_id, estimate_id, deliver=deliver)
         else:
             raise ValueError("Job must contain either photo_id or photo_ids")
     except Exception:
@@ -130,7 +135,9 @@ async def handle_job(job: dict[str, Any]) -> None:
                     pass
 
 
-async def handle_single_photo_job(photo_id: str) -> None:
+async def handle_single_photo_job(
+    photo_id: str, estimate_id: str | None = None, deliver: bool = True
+) -> None:
     """Handle legacy single-photo estimation job."""
     if photo_id is None:
         raise ValueError("photo_id cannot be None")
@@ -157,8 +164,11 @@ async def handle_single_photo_job(photo_id: str) -> None:
         est.setdefault("confidence", 0.5)
         logger.info(f"Estimation completed for photo {photo_id}: {est}")
 
-        estimate_id = await db_save_estimate(photo_id=photo_id, est=est)
+        estimate_id = await db_save_estimate(photo_id=photo_id, est=est, estimate_id=estimate_id)
         logger.info(f"Estimate saved with ID: {estimate_id} for photo: {photo_id}")
+
+        if not deliver:
+            return
 
         # Create meal record from estimate
         await create_meal_from_estimate(photo_record, estimate_id)
@@ -172,7 +182,11 @@ async def handle_single_photo_job(photo_id: str) -> None:
 
 
 async def handle_multiphotos_job(
-    photo_ids: list[str], description: str | None = None, media_group_id: str | None = None
+    photo_ids: list[str],
+    description: str | None = None,
+    media_group_id: str | None = None,
+    estimate_id: str | None = None,
+    deliver: bool = True,
 ) -> None:
     """Handle multi-photo estimation job (Feature: 003-update-logic-for).
 
@@ -180,6 +194,8 @@ async def handle_multiphotos_job(
         photo_ids: List of photo IDs (1-5 photos)
         description: Optional meal description
         media_group_id: Telegram media group identifier
+        estimate_id: ID to save the estimate under (assigned at enqueue)
+        deliver: Create a meal and send the result via Telegram (False for API jobs)
     """
     try:
         logger.info(f"Processing {len(photo_ids)} photos together")
@@ -223,9 +239,12 @@ async def handle_multiphotos_job(
 
         # Save estimate with all photo IDs
         estimate_id = await db_save_estimate(
-            photo_id=photo_ids[0], est=estimate_data, photo_ids=photo_ids
+            photo_id=photo_ids[0], est=estimate_data, photo_ids=photo_ids, estimate_id=estimate_id
         )
         logger.info(f"Multi-photo estimate saved with ID: {estimate_id}")
+
+        if not deliver:
+            return
 
         # Create meal from estimate
         if photo_records:

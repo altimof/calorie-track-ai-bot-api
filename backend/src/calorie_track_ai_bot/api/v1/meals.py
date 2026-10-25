@@ -33,11 +33,10 @@ router = APIRouter()
 async def create_meal(
     request: Request, payload: MealCreateManualRequest | MealCreateFromEstimateRequest
 ):
-    if isinstance(payload, MealCreateManualRequest):
-        return await db_create_meal_from_manual(payload)
-
-    # For estimate-based meals, we need to get the user_id from headers
     user_id = await get_authenticated_user_id(request)
+
+    if isinstance(payload, MealCreateManualRequest):
+        return await db_create_meal_from_manual(payload, user_id)
 
     return await db_create_meal_from_estimate(payload, user_id)
 

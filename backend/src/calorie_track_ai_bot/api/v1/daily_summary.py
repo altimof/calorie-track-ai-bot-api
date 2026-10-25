@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from ...schemas import DailySummary, TodayResponse
 from ...services.db import db_get_daily_summary, db_get_summaries_by_date_range, db_get_today_data
 from ...utils.error_handling import handle_api_errors
-from .deps import get_telegram_user_id, get_user_timezone
+from .deps import get_authenticated_user_id, get_user_timezone
 
 router = APIRouter()
 
@@ -16,15 +16,15 @@ router = APIRouter()
 @handle_api_errors("daily summary")
 async def get_daily_summary(
     date: str,
-    telegram_user_id: str = Depends(get_telegram_user_id),
+    user_id: str = Depends(get_authenticated_user_id),
     tz: str = Depends(get_user_timezone),
 ) -> dict[str, Any]:
     """Get daily summary for a specific date."""
-    summary = await db_get_daily_summary(date, telegram_user_id, tz=tz)
+    summary = await db_get_daily_summary(date, user_id, tz=tz)
     if summary is None:
         # Return empty summary if no meals found
         return {
-            "user_id": telegram_user_id,
+            "user_id": user_id,
             "date": date,
             "kcal_total": 0,
             "macros_totals": {"protein_g": 0, "fat_g": 0, "carbs_g": 0},
@@ -36,7 +36,7 @@ async def get_daily_summary(
 @handle_api_errors("weekly summary")
 async def get_weekly_summary(
     start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
-    telegram_user_id: str = Depends(get_telegram_user_id),
+    user_id: str = Depends(get_authenticated_user_id),
     tz: str = Depends(get_user_timezone),
 ) -> list[dict[str, Any]]:
     """Get weekly summary starting from the given date."""
@@ -48,7 +48,7 @@ async def get_weekly_summary(
 
     # Get all meals for the week in a single query
     summaries_dict = await db_get_summaries_by_date_range(
-        start_date_str, end_date_str, telegram_user_id, tz=tz
+        start_date_str, end_date_str, user_id, tz=tz
     )
 
     # Build the response array with all 7 days
@@ -63,7 +63,7 @@ async def get_weekly_summary(
             # Create empty summary for days with no meals
             summaries.append(
                 {
-                    "user_id": telegram_user_id,
+                    "user_id": user_id,
                     "date": date_str,
                     "kcal_total": 0,
                     "macros_totals": {"protein_g": 0, "fat_g": 0, "carbs_g": 0},
@@ -78,7 +78,7 @@ async def get_weekly_summary(
 async def get_monthly_summary(
     year: int = Query(..., description="Year"),
     month: int = Query(..., description="Month (1-12)"),
-    telegram_user_id: str = Depends(get_telegram_user_id),
+    user_id: str = Depends(get_authenticated_user_id),
     tz: str = Depends(get_user_timezone),
 ):
     """Get monthly summary for the given year and month."""
@@ -90,7 +90,7 @@ async def get_monthly_summary(
 
     # Get all meals for the month in a single query
     summaries_dict = await db_get_summaries_by_date_range(
-        start_date_str, end_date_str, telegram_user_id, tz=tz
+        start_date_str, end_date_str, user_id, tz=tz
     )
 
     # Build the response array with all days of the month
@@ -104,7 +104,7 @@ async def get_monthly_summary(
             # Create empty summary for days with no meals
             summaries.append(
                 {
-                    "user_id": telegram_user_id,
+                    "user_id": user_id,
                     "date": date_str,
                     "kcal_total": 0,
                     "macros_totals": {"protein_g": 0, "fat_g": 0, "carbs_g": 0},
@@ -118,9 +118,9 @@ async def get_monthly_summary(
 @handle_api_errors("today data")
 async def get_today_data(
     date: str,
-    telegram_user_id: str = Depends(get_telegram_user_id),
+    user_id: str = Depends(get_authenticated_user_id),
     tz: str = Depends(get_user_timezone),
 ):
     """Get all data needed for the Today page (meals + daily summary) in a single request."""
-    today_data = await db_get_today_data(date, telegram_user_id, tz=tz)
+    today_data = await db_get_today_data(date, user_id, tz=tz)
     return today_data
