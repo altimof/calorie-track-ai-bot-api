@@ -57,7 +57,7 @@ class TestEstimatesEndpoints:
         assert response.status_code == 200
         assert response.json() == {"estimate_id": "job123", "status": "queued"}
         owned_photo.assert_awaited_once_with(PHOTO_ID, USER_ID)
-        mock_enqueue.assert_awaited_once_with(PHOTO_ID)
+        mock_enqueue.assert_awaited_once_with(PHOTO_ID, source="api")
 
     @patch("calorie_track_ai_bot.api.v1.estimates.enqueue_estimate_job")
     def test_estimate_other_users_photo_returns_404(self, mock_enqueue, client, owned_photo):

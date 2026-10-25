@@ -51,6 +51,7 @@ async def enqueue_estimate_job(
     description: str | None = None,
     chat_id: int | None = None,
     telegram_id: int | None = None,
+    source: str = "bot",
 ) -> str:
     """Enqueue an estimation job for one or more photos.
 
@@ -59,6 +60,8 @@ async def enqueue_estimate_job(
         description: Optional user-provided meal description
         chat_id: Telegram chat ID for sending results/errors back
         telegram_id: Telegram user ID for user identification
+        source: "bot" to log a meal and message the user when done; "api" when the
+            client logs the meal itself (POST /meals) and polls for the estimate
 
     Returns:
         ID the worker saves the estimate under; GET /estimates/{id} returns 404
@@ -76,6 +79,7 @@ async def enqueue_estimate_job(
         "photo_ids": photo_ids,
         "description": description,
         "estimate_id": estimate_id,
+        "source": source,
     }
     if chat_id is not None:
         job["chat_id"] = chat_id

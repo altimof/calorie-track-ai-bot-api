@@ -115,7 +115,32 @@ class TestEstimateWorker:
         ) as mock_multi:
             await handle_job(job)
 
-        mock_multi.assert_awaited_once_with(["p1", "p2"], None, None, "estimate-assigned")
+        mock_multi.assert_awaited_once_with(
+            ["p1", "p2"], None, None, "estimate-assigned", deliver=True
+        )
+
+    @pytest.mark.asyncio
+    async def test_handle_job_from_api_skips_meal_and_message(self, mock_dependencies):
+        """API jobs only save the estimate: the client logs the meal itself."""
+        job = {"photo_id": "photo123", "estimate_id": "estimate-assigned", "source": "api"}
+
+        await handle_job(job)
+
+        mock_dependencies["db_save"].assert_called_once()
+        mock_dependencies["create_meal"].assert_not_called()
+        mock_dependencies["send_estimate"].assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_handle_job_from_api_multiphoto_not_delivered(self):
+        """Multi-photo API jobs are handled without delivery."""
+        job = {"photo_ids": ["p1"], "estimate_id": "e1", "source": "api"}
+
+        with patch(
+            "calorie_track_ai_bot.workers.estimate_worker.handle_multiphotos_job"
+        ) as mock_multi:
+            await handle_job(job)
+
+        assert mock_multi.call_args.kwargs["deliver"] is False
 
     @pytest.mark.asyncio
     async def test_handle_job_with_existing_confidence(self, mock_dependencies):

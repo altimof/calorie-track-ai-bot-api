@@ -29,7 +29,9 @@ async def estimate_photo(photo_id: str, user_id: str = Depends(get_authenticated
         raise HTTPException(404, "Not found")
 
     logger.info(f"Requesting estimate for photo_id: {photo_id}")
-    job_id = await enqueue_estimate_job(photo_id)
+    # The client creates the meal from the estimate itself (POST /meals); the worker
+    # must not log a second meal or message the user on Telegram
+    job_id = await enqueue_estimate_job(photo_id, source="api")
     logger.info(f"Estimation job enqueued with ID: {job_id} for photo: {photo_id}")
     return EstimateQueuedResponse(estimate_id=job_id, status=Status.queued)
 

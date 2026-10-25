@@ -189,7 +189,8 @@ class TestQueueFunctions:
 
         # Should be a valid JSON structure
         assert isinstance(job_data, dict)
-        assert set(job_data) == {"photo_ids", "description", "estimate_id"}
+        assert set(job_data) == {"photo_ids", "description", "estimate_id", "source"}
+        assert job_data["source"] == "bot"
 
     @pytest.mark.asyncio
     async def test_round_trip_job_processing(self, mock_redis):
