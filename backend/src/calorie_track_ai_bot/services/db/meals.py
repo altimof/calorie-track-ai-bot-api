@@ -18,6 +18,10 @@ from .estimates import db_get_estimate, db_get_user_estimate
 from .photos import db_get_photo
 
 
+class EstimateNotFoundError(ValueError):
+    """The estimate does not exist or none of its photos belong to the user."""
+
+
 async def db_create_meal_from_manual(data: MealCreateManualRequest, user_id: str) -> dict[str, str]:
     pool = await database.get_pool()
 
@@ -41,7 +45,7 @@ async def db_create_meal_from_estimate(
     # Get the estimate data to retrieve kcal_mean; only the owner of its photos may use it
     estimate = await db_get_user_estimate(str(data.estimate_id), user_id)
     if not estimate:
-        raise ValueError(f"Estimate not found: {data.estimate_id}")
+        raise EstimateNotFoundError(f"Estimate not found: {data.estimate_id}")
 
     # Set kcal_total from estimate unless overridden
     kcal_total = estimate.get("kcal_mean", 0)
