@@ -228,7 +228,8 @@ class TestPhotoUrlGeneration:
                 return_value=mock_pool,
             ),
             patch(
-                "calorie_track_ai_bot.services.db.meals.db_get_estimate", new_callable=AsyncMock
+                "calorie_track_ai_bot.services.db.meals.db_get_user_estimate",
+                new_callable=AsyncMock,
             ) as mock_get_estimate,
         ):
             mock_get_estimate.return_value = {
@@ -264,7 +265,8 @@ class TestPhotoUrlGeneration:
                 return_value=mock_pool,
             ),
             patch(
-                "calorie_track_ai_bot.services.db.meals.db_get_estimate", new_callable=AsyncMock
+                "calorie_track_ai_bot.services.db.meals.db_get_user_estimate",
+                new_callable=AsyncMock,
             ) as mock_get_estimate,
         ):
             mock_get_estimate.return_value = {

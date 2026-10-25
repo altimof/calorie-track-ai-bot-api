@@ -14,7 +14,7 @@ from .. import database
 from ..config import logger
 from ..storage import BUCKET_NAME, s3
 from ._base import LOCAL_MEAL_DATE_SQL, resolve_user_id
-from .estimates import db_get_estimate
+from .estimates import db_get_estimate, db_get_user_estimate
 from .photos import db_get_photo
 
 
@@ -38,8 +38,8 @@ async def db_create_meal_from_estimate(
 
     mid = str(uuid.uuid4())
 
-    # Get the estimate data to retrieve kcal_mean
-    estimate = await db_get_estimate(str(data.estimate_id))
+    # Get the estimate data to retrieve kcal_mean; only the owner of its photos may use it
+    estimate = await db_get_user_estimate(str(data.estimate_id), user_id)
     if not estimate:
         raise ValueError(f"Estimate not found: {data.estimate_id}")
 
@@ -88,8 +88,8 @@ async def db_create_meal_from_estimate(
 
         for i, photo_id in enumerate(photo_ids[:5]):
             await conn.execute(
-                "UPDATE photos SET meal_id = %s, display_order = %s WHERE id = %s",
-                (mid, i, photo_id),
+                "UPDATE photos SET meal_id = %s, display_order = %s WHERE id = %s AND user_id = %s",
+                (mid, i, photo_id, user_id),
             )
 
         if photo_ids:

@@ -207,7 +207,7 @@ class TestDatabaseFunctions:
         mock_estimate = {"kcal_mean": 400, "kcal_min": 350, "kcal_max": 450}
 
         with patch(
-            "calorie_track_ai_bot.services.db.meals.db_get_estimate",
+            "calorie_track_ai_bot.services.db.meals.db_get_user_estimate",
             return_value=mock_estimate,
         ):
             data = MealCreateFromEstimateRequest(
@@ -238,7 +238,7 @@ class TestDatabaseFunctions:
         mock_estimate = {"kcal_mean": 600, "kcal_min": 550, "kcal_max": 650}
 
         with patch(
-            "calorie_track_ai_bot.services.db.meals.db_get_estimate",
+            "calorie_track_ai_bot.services.db.meals.db_get_user_estimate",
             return_value=mock_estimate,
         ):
             data = MealCreateFromEstimateRequest(
@@ -259,11 +259,11 @@ class TestDatabaseFunctions:
 
     @pytest.mark.asyncio
     async def test_db_create_meal_from_estimate_not_found(self, mock_pool):
-        """Raises ValueError when the estimate does not exist."""
+        """Raises ValueError when the estimate does not exist or is not the user's."""
         _pool, _conn, _cursor = mock_pool
 
         with patch(
-            "calorie_track_ai_bot.services.db.meals.db_get_estimate",
+            "calorie_track_ai_bot.services.db.meals.db_get_user_estimate",
             return_value=None,
         ):
             data = MealCreateFromEstimateRequest(
@@ -275,6 +275,33 @@ class TestDatabaseFunctions:
 
             with pytest.raises(ValueError, match="Estimate not found"):
                 await db_create_meal_from_estimate(data, "user123")
+
+    @pytest.mark.asyncio
+    async def test_db_create_meal_from_estimate_scoped_to_user(self, mock_pool):
+        """The estimate is looked up for the user, and only the user's photos are re-linked."""
+        _pool, conn, _cursor = mock_pool
+
+        mock_estimate = {"kcal_mean": 500, "photo_ids": ["photo-1", "photo-2"]}
+
+        with patch(
+            "calorie_track_ai_bot.services.db.meals.db_get_user_estimate",
+            return_value=mock_estimate,
+        ) as mock_get:
+            data = MealCreateFromEstimateRequest(
+                meal_date=date(2024, 1, 1),
+                meal_type=MealType.lunch,
+                estimate_id="00000000-0000-0000-0000-000000000123",
+            )
+
+            await db_create_meal_from_estimate(data, "user123")
+
+        mock_get.assert_awaited_once_with("00000000-0000-0000-0000-000000000123", "user123")
+        photo_updates = conn.execute.call_args_list[1:]
+        assert len(photo_updates) == 2
+        for call, photo_id in zip(photo_updates, ["photo-1", "photo-2"], strict=True):
+            sql, params = call[0]
+            assert "AND user_id = %s" in sql
+            assert params[2:] == (photo_id, "user123")
 
     # ------------------------------------------------------------------
     # db_delete_meal
