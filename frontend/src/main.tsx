@@ -3,6 +3,9 @@ import { createRoot } from "react-dom/client";
 import "./app.css";
 import "./i18n";
 import { App } from "./app";
+import { installStaleChunkReload } from "./utils/staleChunkReload";
+
+installStaleChunkReload();
 
 // Initialize Telegram WebApp (only when running inside Telegram)
 const webapp = window.Telegram?.WebApp;
