@@ -231,6 +231,12 @@ const en = {
     reload: "Reload Page",
     goHome: "Go Home",
   },
+  notRegistered: {
+    title: "Start the bot first",
+    message:
+      "To use the app, open the bot's chat and tap Start. Then open the app again.",
+    close: "Back to the chat",
+  },
 } as const;
 
 export default en;
